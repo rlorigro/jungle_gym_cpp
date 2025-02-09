@@ -50,6 +50,7 @@ include_directories(
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
         src/A.cpp
+        src/Environment.cpp
         src/SnakeEnv.cpp
 )
 

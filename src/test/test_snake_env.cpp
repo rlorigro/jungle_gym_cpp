@@ -189,45 +189,37 @@ void RandomSnake::move_random() {
 
 
 void test(){
-    size_t w = 32;
-    size_t l = 10;
+    size_t w = 10;
 
     SnakeEnv e(w,w);
-    RandomSnake s(w, w, 0, 0);
+    auto action_space = e.get_action_space();
 
-    for (auto i: e.action_space.sizes()){
-        cerr << i << ',';
-    }
-    cerr << '\n';
-
-    auto accessor = e.observation_space.accessor<int32_t,2>();
-
-    s.grow_random(l);
-
-    for (auto it = s.snake.begin(); it != s.snake.end(); ++it) {
-        accessor[it->first][it->second] = 1;
-    }
+    cerr << action_space << '\n';
+    auto action_space_1d = action_space.accessor<int32_t,1>();
 
     std::thread t(&SnakeEnv::render, &e);
 
-    cerr << e.observation_space << '\n';
+    const auto observation_space = e.get_observation_space();
+
+    cerr << observation_space << '\n';
+
+    mt19937 generator(1337);
+    std::uniform_int_distribution<size_t> dist(0, action_space.sizes()[0] - 1); // Create uniform distribution
 
     for (size_t i=0; i<100; i++) {
-        auto [x1,y1] = s.snake.back();
-        accessor[x1][y1] = 0;
+        size_t a = dist(generator);
 
-        s.move_random();
+        action_space *= 0;
+        action_space_1d[a] = 1;
 
-        auto [x2,y2] = s.snake.front();
-        accessor[x2][y2] = 1;
+        e.step(action_space);
+        cerr << observation_space << '\n';
 
-        cerr << e.observation_space << '\n';
-
-        if (s.is_dead()) {
-            break;
+        if (e.is_terminated() or e.is_truncated()) {
+            e.reset();
         }
 
-        sleep_for(std::chrono::duration<double, std::milli>(200));
+        sleep_for(std::chrono::duration<double, std::milli>(1000));
     }
 
     t.join();

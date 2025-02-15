@@ -154,6 +154,9 @@ void SnakeEnv::step(at::Tensor& action) {
 void SnakeEnv::reset() {
     observation_space *= 0;
     generator = mt19937(random_device()());
+    terminated = false;
+    truncated = false;
+    reward = 0;
     initialize_snake();
 }
 
@@ -300,7 +303,6 @@ void SnakeEnv::render() {
         SDL_RenderPresent(renderer);
 
         // Delay to control the frame rate (optional)
-        cerr << "waiting" << '\n';
         SDL_Delay(16);
     }
 

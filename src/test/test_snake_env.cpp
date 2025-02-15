@@ -219,7 +219,7 @@ void test(){
             e.reset();
         }
 
-        sleep_for(std::chrono::duration<double, std::milli>(1000));
+        sleep_for(std::chrono::duration<double, std::milli>(250));
     }
 
     t.join();

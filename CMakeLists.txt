@@ -139,6 +139,7 @@ endforeach()
 
 set(EXECUTABLES
         a
+        train_snake
 )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})

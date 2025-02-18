@@ -14,30 +14,52 @@ using std::runtime_error;
 using std::cerr;
 using std::random_device;
 using std::vector;
+using std::to_string;
 
 namespace JungleGym{
 
 SnakeEnv::SnakeEnv(int64_t width, int64_t height):
-    observation_space(torch::zeros({width, height}, torch::kInt32)),
-    action_space(torch::zeros({4}, torch::kInt32)),
+    observation_space(torch::zeros({width, height}, torch::kFloat32)),
+    action_space(torch::zeros({4}, torch::kFloat32)),
+    x_permutation(width),
+    y_permutation(height),
     generator(random_device()()),
     width(width),
-    height(height)
+    height(height),
+    i_x(0),
+    i_y(0)
 {
     if (width < 2 or height < 2) {
         throw std::runtime_error("ERROR: Cannot initialize 3-length snake in grid size < 2x2");
     }
 
+    for (int64_t i = 0; i < width; i++) {
+        x_permutation[i] = i;
+    }
+
+    for (int64_t i = 0; i < height; i++) {
+        y_permutation[i] = i;
+    }
+
+    std::ranges::shuffle(x_permutation, generator);
+    std::ranges::shuffle(y_permutation, generator);
+
     initialize_snake();
+    add_apple(true);
 }
 
 
-at::Tensor SnakeEnv::get_action_space() const {
+torch::Tensor SnakeEnv::get_action_space() const {
     return action_space;
 }
 
 
-const at::Tensor& SnakeEnv::get_observation_space() const {
+int64_t SnakeEnv::get_prev_action() const {
+    return pending_action;
+}
+
+
+const torch::Tensor& SnakeEnv::get_observation_space() const {
     return observation_space;
 }
 
@@ -48,49 +70,47 @@ bool SnakeEnv::is_valid(const coord_t& coord) const {
 
 
 bool SnakeEnv::is_open(const coord_t& coord) const {
-    return observation_space_2d[coord.first][coord.second] == 0;
+    return int64_t(round(observation_space_2d[coord.first][coord.second])) != SNAKE_BODY;
 }
 
 
-void SnakeEnv::update_coord(const at::Tensor& action, coord_t& coord) const{
-    auto a = action.argmax(0).item<int64_t>();
-
+void SnakeEnv::update_coord(int64_t a, coord_t& coord) const{
     switch (a) {
-        case 0:
+        case UP:
             coord.second += 1;   // UP
             break;
-        case 1:
+        case RIGHT:
             coord.first += 1;    // RIGHT
             break;
-        case 2:
+        case DOWN:
             coord.second -= 1;   // DOWN
             break;
-        case 3:
+        case LEFT:
             coord.first -= 1;    // LEFT
             break;
         default:
-            throw std::runtime_error("ERROR: Invalid range");
+            throw std::runtime_error("ERROR: Invalid action range: " + to_string(a));
     }
 }
 
 
-void SnakeEnv::get_complement(at::Tensor& action) const{
+void SnakeEnv::get_complement(torch::Tensor& action) const{
     auto a = action.argmax(0).item<int64_t>();
     auto a_1d = action.accessor<int64_t,1>();
     action *= 0;
     
     switch (a) {
-        case 0:
-            a_1d[2] = 1;   // UP --> DOWN
+        case UP:
+            a_1d[DOWN] = 1;   // UP --> DOWN
             break;
-        case 1:
-            a_1d[3] = 1;   // RIGHT --> LEFT
+        case RIGHT:
+            a_1d[LEFT] = 1;   // RIGHT --> LEFT
             break;
-        case 2:
-            a_1d[0] = 1;   // DOWN --> UP
+        case DOWN:
+            a_1d[UP] = 1;   // DOWN --> UP
             break;
-        case 3:
-            a_1d[1] = 1;   // LEFT --> RIGHT
+        case LEFT:
+            a_1d[RIGHT] = 1;   // LEFT --> RIGHT
             break;
         default:
             throw std::runtime_error("ERROR: Invalid range");
@@ -100,22 +120,74 @@ void SnakeEnv::get_complement(at::Tensor& action) const{
 
 int64_t SnakeEnv::get_complement(int64_t a) const{
     switch (a) {
-        case 0:
-            return 2;   // UP --> DOWN
-        case 1:
-            return 3;   // RIGHT --> LEFT
-        case 2:
-            return 0;   // DOWN --> UP
-        case 3:
-            return 1;   // LEFT --> RIGHT
+        case UP:
+            return DOWN;   // UP --> DOWN
+        case RIGHT:
+            return LEFT;   // RIGHT --> LEFT
+        case DOWN:
+            return UP;   // DOWN --> UP
+        case LEFT:
+            return RIGHT;   // LEFT --> RIGHT
         default:
             throw std::runtime_error("ERROR: Invalid range");
     }
 }
 
 
+void SnakeEnv::add_apple_unsafe() {
+    // The apple positions are predestined by the x/y_permutation vectors.
+    for (size_t i=0; i<width; i++) {
+        auto x = x_permutation[i_x%width];
+
+        for (size_t j=0; j<width; j++) {
+            auto y = y_permutation[i_y%width];
+
+            if (int64_t(round(observation_space_2d[x][y])) != SNAKE_BODY) {
+                observation_space_2d[x][y] = APPLE;
+                apple = {x,y};
+                return;
+            }
+            i_y++;
+        }
+        i_x++;
+    }
+
+    // This should be unreachable because it means all squares have been checked
+    // Will deal with this error later (good problem to have)
+    throw runtime_error("ERROR: cannot allocate apple: you win");
+}
+
+
 // Definitions for the virtual functions
-void SnakeEnv::step(at::Tensor& action) {
+void SnakeEnv::add_apple(bool use_lock) {
+    if (use_lock) {
+        std::unique_lock lock(m);
+        add_apple_unsafe();
+    }
+    else {
+        add_apple_unsafe();
+    }
+}
+
+
+// Definitions for the virtual functions
+void SnakeEnv::step() {
+    step(pending_action);
+}
+
+
+// Definitions for the virtual functions
+void SnakeEnv::step(const torch::Tensor& action) {
+    auto a = int64_t(action.argmax(0).item<int64_t>());
+
+    step(a);
+}
+
+
+// Definitions for the virtual functions
+void SnakeEnv::step(int64_t a) {
+    reward = 0;
+
     if (terminated or truncated){
         return;
     }
@@ -125,17 +197,19 @@ void SnakeEnv::step(at::Tensor& action) {
     // Even if the move is invalid we add it to the snake, and then test afterward
     snake.push_front(snake.front());
 
-    update_coord(action, snake.front());
+    update_coord(a, snake.front());
 
     if (not is_valid(snake.front())) {
         snake.pop_front();
         truncated = true;
+        reward = -50;
         return;
     }
 
     if (not is_open(snake.front())) {
         snake.pop_front();
         truncated = true;
+        reward = -50;
         return;
     }
 
@@ -144,10 +218,18 @@ void SnakeEnv::step(at::Tensor& action) {
     // Update the grid (add head square)
     observation_space_2d[snake.front().first][snake.front().second] = 1;
 
-    // Update the grid (remove tail square)
-    observation_space_2d[tail.first][tail.second] = 0;
-
-    snake.pop_back();
+    if (snake.front() == apple) {
+        cerr << "mmm ... delicious" << '\n';
+        add_apple(false);
+        reward += 10;
+    }
+    else {
+        // Update the grid (remove tail square)
+        // Only trim tail when not eatin a apple
+        observation_space_2d[tail.first][tail.second] = 0;
+        snake.pop_back();
+        reward += 1;
+    }
 }
 
 
@@ -157,7 +239,13 @@ void SnakeEnv::reset() {
     terminated = false;
     truncated = false;
     reward = 0;
+    pending_action.store(0);
     initialize_snake();
+    std::ranges::shuffle(x_permutation, generator);
+    std::ranges::shuffle(y_permutation, generator);
+    i_x = 0;
+    i_y = 0;
+    add_apple(true);
 }
 
 
@@ -174,9 +262,6 @@ void SnakeEnv::get_neck(coord_t& coord) const {
 void SnakeEnv::initialize_snake() {
     snake = {};
 
-    auto action = get_action_space();
-    auto action_1d = action.accessor<int32_t,1>();
-
     std::unique_lock lock(m);  // Exclusive lock for writing
 
     // Guaranteed valid starting point
@@ -184,15 +269,12 @@ void SnakeEnv::initialize_snake() {
     std::uniform_int_distribution<int64_t> y_dist(0, height-1);
     snake.emplace_front(x_dist(generator), y_dist(generator));
     observation_space_2d[snake.front().first][snake.front().second] = 1;
-    vector<size_t> moves = {0,1,2,3};
-
-    cerr << observation_space << '\n';
+    vector<int64_t> moves = {0,1,2,3};
 
     while (snake.size() < 3) {
         snake.push_front(snake.front());
 
         std::shuffle(moves.begin(), moves.end(), generator);
-        cerr << "-- head " << snake.front() << '\n';
 
         for (size_t i=0; i<=moves.size(); i++) {
             if (i == 4) {
@@ -201,25 +283,18 @@ void SnakeEnv::initialize_snake() {
 
             auto a = moves[i];
 
-            action *= 0;
-            action_1d[a] = 1;
-
-            update_coord(action, snake.front());
-
-            cerr << "move " << a << '\n';
-            cerr << "head " << snake.front() << '\n';
+            update_coord(a, snake.front());
 
             if (is_valid(snake.front()) and is_open(snake.front())) {
                 observation_space_2d[snake.front().first][snake.front().second] = 1;
-                cerr << observation_space << '\n';
+
+                // Keep track of prev action even when initializing so it can be known at start
+                pending_action = a;
                 break;
             }
             else {
-                cerr << "fail" << '\n';
-                cerr << is_valid(snake.front()) << ',' << is_open(snake.front()) << '\n';
                 // Reset to prev position
                 snake.front() = *(++snake.begin());
-                cerr << "reset " << snake.front() << '\n';
             }
         }
     }
@@ -228,10 +303,10 @@ void SnakeEnv::initialize_snake() {
 }
 
 
-void SnakeEnv::render() {
+void SnakeEnv::render(bool interactive) {
     int32_t SCREEN_WIDTH = 500;
     int32_t SCREEN_HEIGHT = SCREEN_WIDTH;
-    int32_t w = SCREEN_WIDTH / (observation_space.sizes()[0] + 1);
+    int32_t w = SCREEN_WIDTH / int32_t(observation_space.sizes()[0] + 1);
 
     std::shared_lock lock(m);
 
@@ -277,6 +352,29 @@ void SnakeEnv::render() {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
+
+            // Handle other events, such as keyboard input
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_ESCAPE) {
+                    quit = true;
+                }
+                else if (e.key.keysym.sym == SDLK_UP) {
+                    cerr << "<-" << '\n';
+                    pending_action = UP;
+                }
+                else if (e.key.keysym.sym == SDLK_RIGHT) {
+                    cerr << "/\\" << '\n';
+                    pending_action = RIGHT;
+                }
+                else if (e.key.keysym.sym == SDLK_DOWN) {
+                    cerr << "->" << '\n';
+                    pending_action = DOWN;
+                }
+                else if (e.key.keysym.sym == SDLK_LEFT) {
+                    cerr << "\\/" << '\n';
+                    pending_action = LEFT;
+                }
+            }
         }
 
         // Clear screen with white
@@ -290,11 +388,22 @@ void SnakeEnv::render() {
         auto accessor = nz.accessor<int64_t,2>();
 
         for (int32_t i=0; i < nz.size(0); i++) {
-            auto x = w*int32_t(accessor[i][0]) + w/2;
-            auto y = w*int32_t(accessor[i][1]) + w/2;
+            auto i_x = accessor[i][0];
+            auto i_y = accessor[i][1];
+
+            // Rendering on Y axis is inverted, so we un-invert y
+            auto x = w*int32_t(i_x) + w/2;
+            auto y = SCREEN_HEIGHT - (w*int32_t(i_y) + w/2) - w;
 
             SDL_Rect r({x+1,y+1,w-2,w-2});
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red
+
+            if (i_x == apple.first and i_y == apple.second) {
+                SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); // Red
+            }
+            else {
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red
+            }
+
             SDL_RenderFillRect(renderer, &r);
         }
         lock.unlock();

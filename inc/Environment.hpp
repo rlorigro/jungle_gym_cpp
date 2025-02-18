@@ -15,8 +15,8 @@ namespace JungleGym{
 
 class Environment{
 protected:
-    at::Tensor action_space;
-    at::Tensor observation_space;
+    torch::Tensor action_space;
+    torch::Tensor observation_space;
     float reward;
     bool terminated;
     bool truncated;
@@ -26,13 +26,13 @@ public:
     virtual ~Environment() = default;
 
     // The action tensor is the same dimension as the object returned by action_space()
-    virtual void step(at::Tensor& action)=0;
+    virtual void step(const torch::Tensor& action)=0;
 
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
-    virtual at::Tensor get_action_space() const=0;
+    virtual torch::Tensor get_action_space() const=0;
 
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
-    virtual const at::Tensor& get_observation_space() const=0;
+    virtual const torch::Tensor& get_observation_space() const=0;
 
     // The reward given by the current step in the environment
     float get_reward() const;
@@ -47,7 +47,7 @@ public:
     bool is_truncated() const;
 
     virtual void reset()=0;
-    virtual void render()=0;
+    virtual void render(bool interactive)=0;
     virtual void close()=0;
 
 };

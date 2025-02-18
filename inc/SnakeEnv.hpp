@@ -7,11 +7,15 @@
 #include <array>
 #include <utility>
 #include <deque>
+#include <atomic>
+#include <vector>
 
 using std::deque;
 using std::pair;
 using std::mt19937;
 using std::array;
+using std::atomic;
+using std::vector;
 
 using coord_t = pair<int64_t, int64_t>;
 
@@ -45,40 +49,63 @@ namespace JungleGym{
 
 
 class SnakeEnv: public Environment{
-    // TODO: fix render fn
-    // TODO: in step function check if should grow
-    // TODO: sparsify args for action, don't pass the entire action space...
+    // TODO: rework encoding for head/body/apple .. just use 1-hot? also head unimplemented currently
 
-    at::Tensor observation_space;
-    at::Tensor action_space;
+    torch::Tensor observation_space;
+    torch::Tensor action_space;
+
+    vector<int64_t> x_permutation;
+    vector<int64_t> y_permutation;
+
     mt19937 generator;
     shared_mutex m;
 
-    deque <pair <int64_t,int64_t> > snake;
+    // The snake will always move forward unless instructed to turn. pending_action is used to cache upcoming action
+    // or simply keep track of the prev instruction so the snake continues to move
+    atomic<int64_t> pending_action = 0;
 
-    at::TensorAccessor<int32_t,2> observation_space_2d = observation_space.accessor<int32_t,2>();
+    deque <coord_t> snake;
+    coord_t apple;
+
+    at::TensorAccessor<float,2> observation_space_2d = observation_space.accessor<float,2>();
 
     int64_t width;
     int64_t height;
 
+    int64_t i_x = 0;
+    int64_t i_y = 0;
+
+    static const int64_t UP = 0;
+    static const int64_t RIGHT = 1;
+    static const int64_t DOWN = 2;
+    static const int64_t LEFT = 3;
+    static const int64_t SNAKE_BODY = 1;
+    static const int64_t SNAKE_HEAD = 1;
+    static const int64_t APPLE = -1;
+
 public:
-    void step(at::Tensor& action);
+    void step(const at::Tensor& action);
+    void step(int64_t a);
+    void step();
     void initialize_snake();
+    void add_apple(bool lock);
+    void add_apple_unsafe();
 
     bool is_valid(const coord_t& coord) const;
     bool is_open(const coord_t& coord) const;
-    void update_coord(const at::Tensor& action, coord_t& coord) const;
+    void update_coord(int64_t a, coord_t& coord) const;
     void get_complement(at::Tensor& action) const;
     int64_t get_complement(int64_t a) const;
     void get_head(coord_t& coord) const;
     void get_neck(coord_t& coord) const;
-    
+    int64_t get_prev_action() const;
+
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
-    at::Tensor get_action_space() const;
-    const at::Tensor& get_observation_space() const;
+    torch::Tensor get_action_space() const;
+    const torch::Tensor& get_observation_space() const;
 
     void reset();
-    void render();
+    void render(bool interactive);
     void close();
 
     SnakeEnv(int64_t width, int64_t height);

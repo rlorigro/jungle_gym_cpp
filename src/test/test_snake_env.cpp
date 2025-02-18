@@ -1,5 +1,6 @@
-#include "SnakeEnv.hpp"
 #include "cpptrace/from_current.hpp"
+#include "SnakeEnv.hpp"
+#include "CLI11.hpp"
 
 #include <stdexcept>
 #include <iostream>
@@ -24,195 +25,32 @@ using std::mutex;
 using namespace JungleGym;
 
 
-class RandomSnake{
-public:
-    deque <pair <int64_t,int64_t> > snake;
-    mt19937 generator;
-    size_t max_width;
-    size_t max_height;
-    bool dead;
-    mutex lock;
-
-    RandomSnake(size_t max_width, size_t max_height);
-    RandomSnake(size_t max_width, size_t max_height, int64_t x_start, int64_t y_start);
-
-    bool is_dead() const;
-    bool is_self(pair <int64_t, int64_t> coord) const;
-    bool is_invalid(pair <int64_t, int64_t> coord) const;
-    void move_random();
-    void grow_random();
-    void grow_random(size_t length);
-
-    // If there is no feasible option this returns false, and updates result the same coord as the snake's head.
-    bool random_step(pair<int64_t, int64_t>& result);
-};
-
-
-RandomSnake::RandomSnake(size_t max_width, size_t max_height):
-    snake({{0,0}}),
-    generator(random_device()()),
-    max_width(max_width),
-    max_height(max_height),
-    dead(false)
-{}
-
-
-RandomSnake::RandomSnake(size_t max_width, size_t max_height, int64_t x_start, int64_t y_start):
-    snake({{x_start, y_start}}),
-    generator(random_device()()),
-    max_width(max_width),
-    max_height(max_height),
-    dead(false)
-{}
-
-
-bool RandomSnake::is_self(pair <int64_t, int64_t> coord) const {
-    for (auto it = snake.begin(); it != snake.end(); ++it) {
-        if (*it == coord) {
-        return true;
-        }
-    }
-
-    return false;
-}
-
-
-bool RandomSnake::is_dead() const {
-    return dead;
-}
-
-
-bool RandomSnake::is_invalid(pair <int64_t, int64_t> coord) const {
-    return coord.first < 0 or coord.first >= max_width or coord.second < 0 or coord.second >= max_height;
-}
-
-
-bool RandomSnake::random_step(pair<int64_t, int64_t>& result) {
-    const auto& prev = snake.front();
-
-    if (dead){
-        result = prev;
-        return false;
-    }
-
-    vector<size_t> moves = {0,1,2,3};
-    std::shuffle(moves.begin(), moves.end(), generator);
-
-    for (size_t i=0; i <= moves.size(); i++) {
-        if (i == moves.size()) {
-            result = prev;
-            return false;
-        }
-
-//        cerr << i << ',' << moves[i] << ',' << prev.first << ',' << prev.second << '\n';
-
-        switch (moves[i]) {
-            case 0:
-                result.first = prev.first + 1;
-                result.second = prev.second;
-                break;
-            case 1:
-                result.second = prev.second + 1;
-                result.first = prev.first;
-                break;
-            case 2:
-                result.first = prev.first - 1;
-                result.second = prev.second;
-                break;
-            case 3:
-                result.second = prev.second - 1;
-                result.first = prev.first;
-                break;
-            default:
-                throw std::runtime_error("ERROR: Invalid range");
-        }
-
-//        cerr << '\t' << result.first << ',' << result.second << '\n';
-
-        if (not is_invalid(result) and not is_self(result)) {
-            break;
-        }
-    }
-
-    return true;
-}
-
-
-void RandomSnake::grow_random(size_t length) {
-    if (dead){
-        return;
-    }
-
-    lock.lock();
-    pair<int64_t, int64_t> next = snake.front();
-
-    while (snake.size() < length) {
-        bool success = random_step(next);
-
-        if (not success) {
-            dead = true;
-            break;
-        }
-        snake.emplace_front(next);
-    }
-
-    lock.unlock();
-}
-
-
-void RandomSnake::grow_random() {
-    if (dead){
-        return;
-    }
-
-    lock.lock();
-    pair<int64_t, int64_t> next = snake.front();
-
-    bool success = random_step(next);
-    if (not success) {
-        dead = true;
-    }
-
-    snake.emplace_front(next);
-    lock.unlock();
-}
-
-
-void RandomSnake::move_random() {
-    if (dead){
-        return;
-    }
-
-    snake.pop_back();
-    grow_random();
-}
-
-
-void test(){
+void test(bool interactive){
     size_t w = 10;
 
     SnakeEnv e(w,w);
     auto action_space = e.get_action_space();
 
     cerr << action_space << '\n';
-    auto action_space_1d = action_space.accessor<int32_t,1>();
 
-    std::thread t(&SnakeEnv::render, &e);
+    std::thread t(&SnakeEnv::render, &e, interactive);
 
     const auto observation_space = e.get_observation_space();
 
     cerr << observation_space << '\n';
 
     mt19937 generator(1337);
-    std::uniform_int_distribution<size_t> dist(0, action_space.sizes()[0] - 1); // Create uniform distribution
+    std::uniform_int_distribution<int64_t> dist(0, action_space.sizes()[0] - 1); // Create uniform distribution
 
     for (size_t i=0; i<100; i++) {
-        size_t a = dist(generator);
+        if (interactive) {
+            e.step();
+        }
+        else {
+            int64_t a = dist(generator);
+            e.step(a);
+        }
 
-        action_space *= 0;
-        action_space_1d[a] = 1;
-
-        e.step(action_space);
         cerr << observation_space << '\n';
 
         if (e.is_terminated() or e.is_truncated()) {
@@ -226,9 +64,26 @@ void test(){
 }
 
 
-int main(){
+int main(int argc, char* argv[]){
+    CLI::App app{"App description"};
+    bool interactive = false;
+
+    // app.add_option(
+    //         "--n_threads",
+    //         n_threads,
+    //         "Maximum number of threads to use");
+
+    app.add_flag("--interactive", interactive, "Use d_min solution to remove all edges not used");
+
+    try{
+        app.parse(argc, argv);
+    }
+    catch (const CLI::ParseError &e) {
+        return app.exit(e);
+    }
+
     CPPTRACE_TRY {
-        test();
+        test(interactive);
     } CPPTRACE_CATCH(const std::exception& e) {
         std::cerr<<"Exception: "<<e.what()<<std::endl;
         cpptrace::from_current_exception().print_with_snippets();

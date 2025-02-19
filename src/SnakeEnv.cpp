@@ -55,7 +55,7 @@ torch::Tensor SnakeEnv::get_action_space() const {
 
 
 int64_t SnakeEnv::get_prev_action() const {
-    return pending_action;
+    return cached_action;
 }
 
 
@@ -172,7 +172,7 @@ void SnakeEnv::add_apple(bool use_lock) {
 
 // Definitions for the virtual functions
 void SnakeEnv::step() {
-    step(pending_action);
+    step(cached_action);
 }
 
 
@@ -192,6 +192,8 @@ void SnakeEnv::step(int64_t a) {
         return;
     }
 
+    cached_action = a;
+
     std::unique_lock lock(m);  // Exclusive lock for writing
 
     // Even if the move is invalid we add it to the snake, and then test afterward
@@ -202,33 +204,39 @@ void SnakeEnv::step(int64_t a) {
     if (not is_valid(snake.front())) {
         snake.pop_front();
         truncated = true;
-        reward = -50;
+        reward = REWARD_COLLISION;
         return;
     }
 
     if (not is_open(snake.front())) {
         snake.pop_front();
         truncated = true;
-        reward = -50;
+        reward = REWARD_COLLISION;
         return;
     }
 
     auto& tail = snake.back();
 
     // Update the grid (add head square)
-    observation_space_2d[snake.front().first][snake.front().second] = 1;
+    observation_space_2d[snake.front().first][snake.front().second] = SNAKE_HEAD;
+
+    coord_t neck;
+    get_neck(neck);
+
+    // Need to set the previous the square back down to BODY value
+    observation_space_2d[neck.first][neck.second] = SNAKE_BODY;
 
     if (snake.front() == apple) {
         cerr << "mmm ... delicious" << '\n';
         add_apple(false);
-        reward += 10;
+        reward += REWARD_APPLE;
     }
     else {
         // Update the grid (remove tail square)
         // Only trim tail when not eatin a apple
         observation_space_2d[tail.first][tail.second] = 0;
         snake.pop_back();
-        reward += 1;
+        reward += REWARD_MOVE;
     }
 }
 
@@ -239,7 +247,7 @@ void SnakeEnv::reset() {
     terminated = false;
     truncated = false;
     reward = 0;
-    pending_action.store(0);
+    cached_action.store(0);
     initialize_snake();
     std::ranges::shuffle(x_permutation, generator);
     std::ranges::shuffle(y_permutation, generator);
@@ -289,7 +297,7 @@ void SnakeEnv::initialize_snake() {
                 observation_space_2d[snake.front().first][snake.front().second] = 1;
 
                 // Keep track of prev action even when initializing so it can be known at start
-                pending_action = a;
+                cached_action = a;
                 break;
             }
             else {
@@ -360,19 +368,19 @@ void SnakeEnv::render(bool interactive) {
                 }
                 else if (e.key.keysym.sym == SDLK_UP) {
                     cerr << "<-" << '\n';
-                    pending_action = UP;
+                    cached_action = UP;
                 }
                 else if (e.key.keysym.sym == SDLK_RIGHT) {
                     cerr << "/\\" << '\n';
-                    pending_action = RIGHT;
+                    cached_action = RIGHT;
                 }
                 else if (e.key.keysym.sym == SDLK_DOWN) {
                     cerr << "->" << '\n';
-                    pending_action = DOWN;
+                    cached_action = DOWN;
                 }
                 else if (e.key.keysym.sym == SDLK_LEFT) {
                     cerr << "\\/" << '\n';
-                    pending_action = LEFT;
+                    cached_action = LEFT;
                 }
             }
         }

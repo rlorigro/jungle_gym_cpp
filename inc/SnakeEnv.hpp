@@ -60,9 +60,9 @@ class SnakeEnv: public Environment{
     mt19937 generator;
     shared_mutex m;
 
-    // The snake will always move forward unless instructed to turn. pending_action is used to cache upcoming action
+    // The snake will always move forward unless instructed to turn. cached_action is used to cache upcoming action
     // or simply keep track of the prev instruction so the snake continues to move
-    atomic<int64_t> pending_action = 0;
+    atomic<int64_t> cached_action = 0;
 
     deque <coord_t> snake;
     coord_t apple;
@@ -80,8 +80,11 @@ class SnakeEnv: public Environment{
     static const int64_t DOWN = 2;
     static const int64_t LEFT = 3;
     static const int64_t SNAKE_BODY = 1;
-    static const int64_t SNAKE_HEAD = 1;
+    static const int64_t SNAKE_HEAD = 2;
     static const int64_t APPLE = -1;
+    static const int64_t REWARD_COLLISION = -10;
+    static const int64_t REWARD_APPLE = 5;
+    static const int64_t REWARD_MOVE = 1;
 
 public:
     void step(const at::Tensor& action);

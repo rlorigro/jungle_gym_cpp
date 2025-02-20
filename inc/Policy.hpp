@@ -33,14 +33,14 @@ input_size(input_size),
 output_size(output_size)
 {
     // Construct and register two Linear submodules.
-    fc1 = register_module("fc1", torch::nn::Linear(input_size, 128));
-    fc2 = register_module("fc2", torch::nn::Linear(128, 128));
-    fc3 = register_module("fc3", torch::nn::Linear(128, 128));
-    fc4 = register_module("fc4", torch::nn::Linear(128, output_size));
+    fc1 = register_module("fc1", torch::nn::Linear(input_size, 256));
+    fc2 = register_module("fc2", torch::nn::Linear(256, 256));
+    fc3 = register_module("fc3", torch::nn::Linear(256, 256));
+    fc4 = register_module("fc4", torch::nn::Linear(256, output_size));
 
-    layernorm1 = register_module("layernorm1", torch::nn::LayerNorm(torch::nn::LayerNormOptions({128})));
-    layernorm2 = register_module("layernorm2", torch::nn::LayerNorm(torch::nn::LayerNormOptions({128})));
-    layernorm3 = register_module("layernorm3", torch::nn::LayerNorm(torch::nn::LayerNormOptions({128})));
+    layernorm1 = register_module("layernorm1", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
+    layernorm2 = register_module("layernorm2", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
+    layernorm3 = register_module("layernorm3", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
 }
 
 

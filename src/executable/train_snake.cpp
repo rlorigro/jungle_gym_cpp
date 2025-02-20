@@ -33,6 +33,16 @@ using std::runtime_error;
 using std::cerr;
 
 
+class Hyperparameters {
+public:
+    size_t episode_length = 400;
+    size_t n_episodes = 10000;
+    size_t batch_size = 128;
+    float gamma = 0.1;
+    float learn_rate = 0.001;
+};
+
+
 void discount_rewards(vector<float>& rewards, float gamma){
     float r_prev = 0;
     float avg = 0;
@@ -58,44 +68,30 @@ void discount_rewards(vector<float>& rewards, float gamma){
 }
 
 
-void train(
-        size_t episode_length,
-        size_t n_episodes,
-        size_t batch_size,
-        float epsilon,
-        float gamma,
-        float learn_rate
-){
-    size_t w = 10;
+void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& params, int64_t w) {
+    // Epsilon is adjusted on a schedule, not fixed
+    float epsilon;
 
     SnakeEnv environment(w,w);
     auto action_space = environment.get_action_space();
-
-    cerr << action_space << '\n';
-
     const auto observation_space = environment.get_observation_space();
 
+    cerr << action_space << '\n';
     cerr << observation_space << '\n';
 
     // Used for deciding if we want to act greedily or sample randomly
     mt19937 generator(1337);
     std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
 
-    // Use a stupid-simple model which is suited only for this grid size
-    // TODO: try other more interesting models once this trains properly
-
-    // Input size is the grid (which is flattened) and output size is the action space (for a policy gradient model)
-    // Create a new Net. 4 is the actions space size TODO: break out var
-    auto model = std::make_shared<ShallowNet>(w*w + 4, 4);
     vector<Tensor> log_actions;
     vector<float> rewards;
 
-    torch::optim::SGD optimizer(model->parameters(), learn_rate);
+    torch::optim::SGD optimizer(model->parameters(), params.learn_rate);
     auto prev_action = environment.get_action_space();
 
     size_t e = 0;
 
-    while (e < n_episodes) {
+    while (e < params.n_episodes) {
         environment.reset();
         log_actions.clear();
         rewards.clear();
@@ -103,10 +99,10 @@ void train(
         float total_reward = 0;
 
         // exponential decay that terminates at ~0.018
-        epsilon = pow(0.99,e/(n_episodes/400));
+        epsilon = pow(0.99,e/(params.n_episodes/400));
         std::bernoulli_distribution dist(epsilon);
 
-        for (size_t s=0; s<episode_length; s++) {
+        for (size_t s=0; s<params.episode_length; s++) {
             // Construct 1-hot to indicate prev action
             prev_action *= 0;
             prev_action[environment.get_prev_action()] = 1;
@@ -150,7 +146,7 @@ void train(
             e++;
         }
 
-        discount_rewards(rewards, gamma);
+        discount_rewards(rewards, params.gamma);
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << " epsilon: " << epsilon << '\n';
@@ -162,11 +158,11 @@ void train(
             loss += -log_actions[i]*rewards[i];
         }
 
-        loss /= float(batch_size);
+        loss /= float(params.batch_size);
         loss.backward();
 
         // Occasionally apply the accumulated gradient to the model
-        if (e % batch_size == 0){
+        if (e % params.batch_size == 0){
             cerr << "updating..." << e << '\n';
             optimizer.step();
             optimizer.zero_grad();
@@ -175,43 +171,117 @@ void train(
 }
 
 
+void test_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& params, int64_t w) {
+    // Epsilon is adjusted on a schedule, not fixed
+    float epsilon = 0;
+    std::bernoulli_distribution dist(epsilon);
+
+    SnakeEnv environment(w,w);
+    auto action_space = environment.get_action_space();
+    const auto observation_space = environment.get_observation_space();
+
+    cerr << action_space << '\n';
+    cerr << observation_space << '\n';
+
+    // Used for deciding if we want to act greedily or sample randomly
+    mt19937 generator(1337);
+    std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
+
+    vector<float> rewards;
+    auto prev_action = environment.get_action_space();
+
+    size_t e = 0;
+
+    std::thread t(&SnakeEnv::render, &environment, false);
+
+    while (e < params.n_episodes) {
+        float total_reward = 0;
+        environment.reset();
+        rewards.clear();
+
+        for (size_t s=0; s<params.episode_length; s++) {
+            // Construct 1-hot to indicate prev action
+            prev_action *= 0;
+            prev_action[environment.get_prev_action()] = 1;
+
+            auto input = (torch::cat({environment.get_observation_space().flatten(), prev_action.flatten()}, 0));
+            input += 0.001;
+
+            auto log_action = model->forward(input);
+            auto probabilities = torch::exp(log_action);
+
+            int64_t choice;
+
+            if (dist(generator) == 1) {
+                choice = choice_dist(generator);
+            }
+            else {
+                // choice = torch::argmax(probabilities).item<int64_t>();
+                choice = torch::multinomial(probabilities, 1).item<int64_t>();
+            }
+
+            // TODO: print actions take at end of episode, why does it fail corners?
+
+            environment.step(choice);
+
+            rewards.emplace_back(environment.get_reward());
+            total_reward += environment.get_reward();
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+            if (environment.is_terminated() or environment.is_truncated()) {
+                break;
+            }
+        }
+
+        // Print some stats, increment loss using episode, update model if batch_size accumulated
+        cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << " epsilon: " << epsilon << '\n';
+    }
+
+    t.join();
+}
+
+
+void train_and_test(Hyperparameters& hyperparams){
+    // For now we fix the grid size
+    size_t w = 10;
+
+    // Input size is the grid (which is flattened) and output size is the action space (for a policy gradient model)
+    // Create a new Net. 4 is the actions space size TODO: break out var
+    auto model = std::make_shared<ShallowNet>(w*w + 4, 4);
+
+    train_policy_gradient(model, hyperparams, w);
+    test_policy_gradient(model, hyperparams, w);
+}
+
+
 int main(int argc, char* argv[]){
     CLI::App app{"App description"};
-    size_t episode_length = 400;
-    size_t n_episodes = 10000;
-    size_t batch_size = 16;
-    float epsilon = 0.3;
-    float gamma = 0.9;
-    float learn_rate = 0.3;
+    Hyperparameters params;
 
     app.add_option(
             "--episode_length",
-            episode_length,
+            params.episode_length,
             "episode_length");
 
     app.add_option(
             "--n_episodes",
-            n_episodes,
+            params.n_episodes,
             "n_episodes");
 
     app.add_option(
             "--batch_size",
-            batch_size,
+            params.batch_size,
             "batch_size");
 
     app.add_option(
-            "--epsilon",
-            epsilon,
-            "epsilon");
-
-    app.add_option(
             "--gamma",
-            gamma,
+            params.gamma,
             "gamma");
 
     app.add_option(
             "--learn_rate",
-            learn_rate,
+            params.learn_rate,
             "learn_rate");
 
     try{
@@ -222,7 +292,7 @@ int main(int argc, char* argv[]){
     }
 
     CPPTRACE_TRY {
-        train(episode_length, n_episodes, batch_size, epsilon, gamma, learn_rate);
+        train_and_test(params);
     } CPPTRACE_CATCH(const std::exception& e) {
         std::cerr<<"Exception: "<<e.what()<<std::endl;
         cpptrace::from_current_exception().print_with_snippets();

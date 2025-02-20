@@ -80,10 +80,10 @@ class SnakeEnv: public Environment{
     static const int64_t DOWN = 2;
     static const int64_t LEFT = 3;
     static const int64_t SNAKE_BODY = 1;
-    static const int64_t SNAKE_HEAD = 2;
+    static const int64_t SNAKE_HEAD = 3;
     static const int64_t APPLE = -1;
-    static const int64_t REWARD_COLLISION = -10;
-    static const int64_t REWARD_APPLE = 5;
+    static const int64_t REWARD_COLLISION = -30;
+    static const int64_t REWARD_APPLE = 20;
     static const int64_t REWARD_MOVE = 1;
 
 public:

@@ -66,7 +66,10 @@ L_{\text{total}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot R_
 $$
 
 where $R_t$ is computed according to Temporal Difference recurrence relation:
-$$ R_t = r_t + \gamma R_{t+1}$$
+
+$$
+R_t = r_t + \gamma R_{t+1}
+$$
 
 and $H(\mathcal{X})$ is the entropy of the action distribution at time $t$:
 

@@ -31,12 +31,13 @@ using namespace JungleGym;
 
 using std::runtime_error;
 using std::cerr;
+using std::min;
 
 
 class Hyperparameters {
 public:
     size_t episode_length = 400;
-    size_t n_episodes = 10000;
+    size_t n_episodes = 2000;
     size_t batch_size = 128;
     float gamma = 0.1;
     float learn_rate = 0.001;
@@ -77,7 +78,6 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
     const auto observation_space = environment.get_observation_space();
 
     cerr << action_space << '\n';
-    cerr << observation_space << '\n';
 
     // Used for deciding if we want to act greedily or sample randomly
     mt19937 generator(1337);
@@ -91,6 +91,13 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
 
     size_t e = 0;
 
+    float eps_terminal = 0.01;
+
+    // log_b(x) = log_e(x)/log_e(b)
+    float eps_norm = log(0.01)/log(0.99);
+
+    cerr << "Using eps_norm: " << eps_norm << " for eps_terminal: " << eps_terminal << '\n';
+
     while (e < params.n_episodes) {
         environment.reset();
         log_actions.clear();
@@ -99,7 +106,7 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
         float total_reward = 0;
 
         // exponential decay that terminates at ~0.018
-        epsilon = pow(0.99,e/(params.n_episodes/400));
+        epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(min(params.n_episodes,size_t(eps_norm))));
         std::bernoulli_distribution dist(epsilon);
 
         for (size_t s=0; s<params.episode_length; s++) {
@@ -119,8 +126,8 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
                 choice = choice_dist(generator);
             }
             else {
-                // choice = torch::argmax(probabilities).item<int64_t>();
-                choice = torch::multinomial(probabilities, 1).item<int64_t>();
+                choice = torch::argmax(probabilities).item<int64_t>();
+                // choice = torch::multinomial(probabilities, 1).item<int64_t>();
             }
 
             // cerr << "probabilities: \n" << probabilities << '\n';
@@ -151,14 +158,14 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << " epsilon: " << epsilon << '\n';
 
-        auto loss = torch::tensor({1}, torch::kFloat32);
+        auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32).requires_grad(true));
 
         // Compute gradients for each step and associated reward
         for (size_t i=0; i<log_actions.size(); i++){
-            loss += -log_actions[i]*rewards[i];
+            loss = loss - log_actions[i]*rewards[i];
         }
 
-        loss /= float(params.batch_size);
+        loss = loss / float(params.batch_size);
         loss.backward();
 
         // Occasionally apply the accumulated gradient to the model
@@ -181,7 +188,6 @@ void test_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& p
     const auto observation_space = environment.get_observation_space();
 
     cerr << action_space << '\n';
-    cerr << observation_space << '\n';
 
     // Used for deciding if we want to act greedily or sample randomly
     mt19937 generator(1337);
@@ -248,7 +254,7 @@ void train_and_test(Hyperparameters& hyperparams){
 
     // Input size is the grid (which is flattened) and output size is the action space (for a policy gradient model)
     // Create a new Net. 4 is the actions space size TODO: break out var
-    auto model = std::make_shared<ShallowNet>(w*w + 4, 4);
+    auto model = std::make_shared<ShallowNet>(w*w*3 + 4, 4);
 
     train_policy_gradient(model, hyperparams, w);
     test_policy_gradient(model, hyperparams, w);

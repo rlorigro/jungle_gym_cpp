@@ -49,8 +49,8 @@ include_directories(
 
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
-        src/A.cpp
         src/Environment.cpp
+        src/ReplayBuffer.cpp
         src/SnakeEnv.cpp
 )
 
@@ -116,7 +116,6 @@ message(STATUS "cpptrace location: ${cpptrace_SOURCE_DIR}")
 # -------- TESTS --------
 
 set(TESTS
-    b
     test_snake_env
     test_sdl2
 )
@@ -138,7 +137,6 @@ endforeach()
 # -------- EXECUTABLES --------
 
 set(EXECUTABLES
-        a
         train_snake
 )
 

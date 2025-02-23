@@ -21,37 +21,10 @@ using coord_t = pair<int64_t, int64_t>;
 
 namespace JungleGym{
 
-/*
-
-    RandomSnake needs to be refactored into an Environment where:
-        is_dead = terminated
-        random_step is refactored to fit into the action space sampling procedure?
-
-    Connect terminated criteria to render loop
-
-    Make observation and action space private and only const accessible through getter functions
-
-    Enforce locks on getters/setters using shared mutex, e.g.:
-
-        void read_tensor(const at::Tensor& tensor) {
-            std::shared_lock<std::shared_mutex> lock(tensor_mutex);  // Shared lock for reading
-            std::cout << "Reading tensor: " << tensor << std::endl;
-        }
-
-        void write_tensor(at::Tensor& tensor) {
-            std::unique_lock<std::shared_mutex> lock(tensor_mutex);  // Exclusive lock for writing
-            tensor[0] = 5;  // Example write operation
-            std::cout << "Writing tensor: " << tensor << std::endl;
-        }
-
-    ...because tensor read operations are not safe when also writing.
- */
-
-
 class SnakeEnv: public Environment{
-    // TODO: rework encoding for head/body/apple .. just use 1-hot? also head unimplemented currently
-
     torch::Tensor observation_space;
+    torch::TensorAccessor<float,3> observation_space_3d;
+
     torch::Tensor action_space;
 
     vector<int64_t> x_permutation;
@@ -67,7 +40,7 @@ class SnakeEnv: public Environment{
     deque <coord_t> snake;
     coord_t apple;
 
-    at::TensorAccessor<float,2> observation_space_2d = observation_space.accessor<float,2>();
+    // auto observation_space_2d = observation_space.accessor<float,2>();
 
     int64_t width;
     int64_t height;
@@ -79,9 +52,11 @@ class SnakeEnv: public Environment{
     static const int64_t RIGHT = 1;
     static const int64_t DOWN = 2;
     static const int64_t LEFT = 3;
-    static const int64_t SNAKE_BODY = 1;
-    static const int64_t SNAKE_HEAD = 3;
-    static const int64_t APPLE = -1;
+
+    static const int64_t SNAKE_BODY = 0;
+    static const int64_t SNAKE_HEAD = 1;
+    static const int64_t APPLE = 2;
+
     static const int64_t REWARD_COLLISION = -30;
     static const int64_t REWARD_APPLE = 20;
     static const int64_t REWARD_MOVE = 1;

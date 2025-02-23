@@ -51,13 +51,11 @@ void test(bool interactive){
             e.step(a);
         }
 
-        cerr << observation_space << '\n';
-
         if (e.is_terminated() or e.is_truncated()) {
             e.reset();
         }
 
-        sleep_for(std::chrono::duration<double, std::milli>(250));
+        sleep_for(std::chrono::duration<double, std::milli>(500));
     }
 
     t.join();

@@ -1,4 +1,5 @@
 #include "cpptrace/from_current.hpp"
+#include "ReplayBuffer.hpp"
 #include "SnakeEnv.hpp"
 #include "Policy.hpp"
 #include "CLI11.hpp"
@@ -38,9 +39,14 @@ class Hyperparameters {
 public:
     size_t episode_length = 400;
     size_t n_episodes = 2000;
-    size_t batch_size = 128;
+    size_t batch_size = 16;
+    float learn_rate = 5e-5;
+
+    // For decay rate of TD recurrence
     float gamma = 0.1;
-    float learn_rate = 0.001;
+
+    // For weight of entropy term in the loss function
+    float lambda = 1e-5;
 };
 
 
@@ -71,7 +77,7 @@ void discount_rewards(vector<float>& rewards, float gamma){
 
 void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& params, int64_t w) {
     // Epsilon is adjusted on a schedule, not fixed
-    float epsilon;
+    float epsilon = 0;
 
     SnakeEnv environment(w,w);
     auto action_space = environment.get_action_space();
@@ -82,9 +88,6 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
     // Used for deciding if we want to act greedily or sample randomly
     mt19937 generator(1337);
     std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
-
-    vector<Tensor> log_actions;
-    vector<float> rewards;
 
     torch::optim::SGD optimizer(model->parameters(), params.learn_rate);
     auto prev_action = environment.get_action_space();
@@ -98,15 +101,14 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
 
     cerr << "Using eps_norm: " << eps_norm << " for eps_terminal: " << eps_terminal << '\n';
 
+    Episode episode;
+
     while (e < params.n_episodes) {
         environment.reset();
-        log_actions.clear();
-        rewards.clear();
-
-        float total_reward = 0;
+        episode.clear();
 
         // exponential decay that terminates at ~0.018
-        epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(min(params.n_episodes,size_t(eps_norm))));
+        // epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(size_t(eps_norm))));
         std::bernoulli_distribution dist(epsilon);
 
         for (size_t s=0; s<params.episode_length; s++) {
@@ -117,55 +119,54 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
             auto input = (torch::cat({environment.get_observation_space().flatten(), prev_action.flatten()}, 0));
             input += 0.001;
 
-            auto log_action = model->forward(input);
-            auto probabilities = torch::exp(log_action);
+            auto log_probabilities = model->forward(input);
+            auto probabilities = torch::exp(log_probabilities);
 
             int64_t choice;
 
             if (dist(generator) == 1) {
                 choice = choice_dist(generator);
+                cerr << "random" << '\n';
             }
             else {
-                choice = torch::argmax(probabilities).item<int64_t>();
-                // choice = torch::multinomial(probabilities, 1).item<int64_t>();
+                // choice = torch::argmax(probabilities).item<int64_t>();
+                choice = torch::multinomial(probabilities, 1).item<int64_t>();
             }
 
             // cerr << "probabilities: \n" << probabilities << '\n';
             // cerr << "choice: " << choice << "\n";
             // cerr << "prev_action: " << environment.get_prev_action() << "\n";
-
-            log_actions.emplace_back(log_action[choice]);
+            // cerr << "length: " << episode.get_size() << "\n";
+            // cerr << "epsilon: " << epsilon << "\n";
 
             environment.step(choice);
 
-            rewards.emplace_back(environment.get_reward());
-            total_reward += environment.get_reward();
+            float reward = environment.get_reward();
+
+            episode.update(log_probabilities, choice, reward);
 
             if (environment.is_terminated() or environment.is_truncated()) {
                 break;
             }
         }
 
-        if (rewards.size() < 4) {
+        if (episode.get_size() < 4) {
             continue;
         }
         else {
             e++;
         }
 
-        discount_rewards(rewards, params.gamma);
+        auto td_loss = episode.compute_td_loss(params.gamma, true);
+        auto entropy_loss = episode.compute_entropy_loss(true);
+
+        // cerr << "td_loss: " << td_loss << '\n';
+        // cerr << "entropy_loss: " << entropy_loss << '\n';
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
-        cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << " epsilon: " << epsilon << '\n';
+        cerr << "episode=" << e << " length=" << episode.get_size() << " entropy_loss=" << entropy_loss.item<float>()*params.lambda << " td_loss: " << td_loss.item<float>() << " epsilon: " << epsilon << '\n';
 
-        auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32).requires_grad(true));
-
-        // Compute gradients for each step and associated reward
-        for (size_t i=0; i<log_actions.size(); i++){
-            loss = loss - log_actions[i]*rewards[i];
-        }
-
-        loss = loss / float(params.batch_size);
+        auto loss = td_loss + params.lambda*entropy_loss;
         loss.backward();
 
         // Occasionally apply the accumulated gradient to the model
@@ -289,6 +290,11 @@ int main(int argc, char* argv[]){
             "--learn_rate",
             params.learn_rate,
             "learn_rate");
+
+    app.add_option(
+            "--lambda",
+            params.lambda,
+            "lambda");
 
     try{
         app.parse(argc, argv);

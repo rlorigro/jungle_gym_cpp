@@ -49,6 +49,22 @@ SnakeEnv::SnakeEnv(int64_t width, int64_t height):
 }
 
 
+void SnakeEnv::reset() {
+    observation_space *= 0;
+    generator = mt19937(random_device()());
+    terminated = false;
+    truncated = false;
+    reward = 0;
+    cached_action.store(0);
+    initialize_snake();
+    std::ranges::shuffle(x_permutation, generator);
+    std::ranges::shuffle(y_permutation, generator);
+    i_x = 0;
+    i_y = 0;
+    add_apple(true);
+}
+
+
 torch::Tensor SnakeEnv::get_action_space() const {
     return action_space;
 }
@@ -243,22 +259,6 @@ void SnakeEnv::step(int64_t a) {
 
     // cerr << "step" << '\n';
     // cerr << observation_space.sum(2,false) << '\n';
-}
-
-
-void SnakeEnv::reset() {
-    observation_space *= 0;
-    generator = mt19937(random_device()());
-    terminated = false;
-    truncated = false;
-    reward = 0;
-    cached_action.store(0);
-    initialize_snake();
-    std::ranges::shuffle(x_permutation, generator);
-    std::ranges::shuffle(y_permutation, generator);
-    i_x = 0;
-    i_y = 0;
-    add_apple(true);
 }
 
 

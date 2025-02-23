@@ -30,9 +30,11 @@ $$
 $$ R_t = r_t + \gamma R_{t+1}$$
 
 #### Loss
+
 $$
 L_\tau = -\sum_{t=0}^{T-1} \log p(a_t^*) \cdot R_t
 $$
+
 where $a_t^*$ is the action corresponding to the maximum probability in $\pi_\theta(a | s_t)$, or the action sampled
 randomly in the case of epsilon greedy policies.
 
@@ -67,6 +69,7 @@ where $R_t$ is computed according to Temporal Difference recurrence relation:
 $$ R_t = r_t + \gamma R_{t+1}$$
 
 and $H(\mathcal{X})$ is the entropy of the action distribution at time $t$:
+
 $$
 H(\mathcal{X}) = - \sum_{x \in \mathcal{X}} p(x) \log p(x)
 $$
@@ -86,7 +89,6 @@ $$
 $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \gamma V(s_{t+1}) \right) \right)^2
 $$
-
 
 ## To do
 Implement:

@@ -27,8 +27,7 @@ class SnakeEnv: public Environment{
 
     torch::Tensor action_space;
 
-    vector<int64_t> x_permutation;
-    vector<int64_t> y_permutation;
+    vector<coord_t> xy_permutation;
 
     mt19937 generator;
     shared_mutex m;
@@ -45,8 +44,7 @@ class SnakeEnv: public Environment{
     int64_t width;
     int64_t height;
 
-    int64_t i_x = 0;
-    int64_t i_y = 0;
+    int64_t i_permutation = 0;
 
     static const int64_t UP = 0;
     static const int64_t RIGHT = 1;
@@ -57,9 +55,9 @@ class SnakeEnv: public Environment{
     static const int64_t SNAKE_HEAD = 1;
     static const int64_t APPLE = 2;
 
-    static const int64_t REWARD_COLLISION = -30;
-    static const int64_t REWARD_APPLE = 20;
-    static const int64_t REWARD_MOVE = 1;
+    static constexpr float REWARD_COLLISION = -30;
+    static constexpr float REWARD_APPLE = 40;
+    static constexpr float REWARD_MOVE = -0.25;
 
 public:
     void step(const at::Tensor& action);

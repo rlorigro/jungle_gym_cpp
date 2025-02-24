@@ -53,7 +53,7 @@ Tensor Episode::compute_entropy_loss(bool mean=false) const{
     // Compute averaged entropy term for episode action distributions
     // WARNING in-place operators discouraged for libtorch tensors that require grad/autodiff
     for (const auto& dist: log_action_distributions){
-        entropy_loss = entropy_loss + compute_entropy(dist);
+        entropy_loss = entropy_loss - compute_entropy(dist);
     }
 
     if (mean){

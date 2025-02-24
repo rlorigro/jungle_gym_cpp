@@ -21,28 +21,22 @@ SnakeEnv::SnakeEnv(int64_t width, int64_t height):
     observation_space(torch::zeros({width, height, 3}, torch::kFloat32)),
     observation_space_3d(observation_space.accessor<float,3>()),
     action_space(torch::zeros({4}, torch::kFloat32)),
-    x_permutation(width),
-    y_permutation(height),
     generator(random_device()()),
     width(width),
     height(height),
-    i_x(0),
-    i_y(0)
+    i_permutation(0)
 {
     if (width < 2 or height < 2) {
         throw std::runtime_error("ERROR: Cannot initialize 3-length snake in grid size < 2x2");
     }
 
-    for (int64_t i = 0; i < width; i++) {
-        x_permutation[i] = i;
+    for (int64_t i=0; i < width; i++) {
+        for (int64_t j=0; j < height; j++) {
+            xy_permutation.emplace_back(i, j);
+        }
     }
 
-    for (int64_t i = 0; i < height; i++) {
-        y_permutation[i] = i;
-    }
-
-    std::ranges::shuffle(x_permutation, generator);
-    std::ranges::shuffle(y_permutation, generator);
+    std::ranges::shuffle(xy_permutation, generator);
 
     initialize_snake();
     add_apple(true);
@@ -57,10 +51,8 @@ void SnakeEnv::reset() {
     reward = 0;
     cached_action.store(0);
     initialize_snake();
-    std::ranges::shuffle(x_permutation, generator);
-    std::ranges::shuffle(y_permutation, generator);
-    i_x = 0;
-    i_y = 0;
+    std::ranges::shuffle(xy_permutation, generator);
+    i_permutation = 0;
     add_apple(true);
 }
 
@@ -151,21 +143,19 @@ int64_t SnakeEnv::get_complement(int64_t a) const{
 
 
 void SnakeEnv::add_apple_unsafe() {
-    // The apple positions are predestined by the x/y_permutation vectors.
+    // The apple positions are predestined by the xy_permutation vector. By iterating this vector we are guaranteed to
+    // observe every coordinate, in random order
     for (size_t i=0; i<width; i++) {
-        auto x = x_permutation[i_x%width];
+        size_t p = i_permutation%xy_permutation.size();
+        auto [x,y] = xy_permutation[p];
 
-        for (size_t j=0; j<width; j++) {
-            auto y = y_permutation[i_y%width];
-
-            if (is_open({x,y})) {
-                observation_space_3d[x][y][APPLE] = 1;
-                apple = {x,y};
-                return;
-            }
-            i_y++;
+        if (is_open({x,y})) {
+            observation_space_3d[x][y][APPLE] = 1;
+            apple = {x,y};
+            return;
         }
-        i_x++;
+
+        i_permutation++;
     }
 
     // This should be unreachable because it means all squares have been checked

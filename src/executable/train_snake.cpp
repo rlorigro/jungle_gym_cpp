@@ -46,7 +46,7 @@ public:
     float gamma = 0.1;
 
     // For weight of entropy term in the loss function
-    float lambda = 1e-5;
+    float lambda = 0.001;
 };
 
 
@@ -166,7 +166,7 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << "episode=" << e << " length=" << episode.get_size() << " entropy_loss=" << entropy_loss.item<float>()*params.lambda << " td_loss: " << td_loss.item<float>() << " epsilon: " << epsilon << '\n';
 
-        auto loss = td_loss + params.lambda*entropy_loss;
+        auto loss = td_loss - params.lambda*entropy_loss;
         loss.backward();
 
         // Occasionally apply the accumulated gradient to the model

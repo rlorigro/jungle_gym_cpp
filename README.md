@@ -1,17 +1,67 @@
 # jungle_gym_cpp
 For practicing libtorch and RL/ML in C++
 
+## Models
 
+### **ShallowNet**
+
+| **Layer**       | **Dimensions**   |
+|-----------------|------------------|
+| **input**       | `w*h*4`          |
+| **fc**          | 256              |
+| **layernorm**   | -                |
+| **GELU**        | -                |
+| **fc**          | 256              |
+| **layernorm**   | -                |
+| **GELU**        | -                |
+| **fc**          | 256              |
+| **layernorm**   | -                |
+| **GELU**        | -                |
+| **fc**          | `output_size`    |
+| **log_softmax** | `output_size`    |
+
+
+### **SimpleConv**
+
+| **Layer**       | **Dimensions**                                                                          |
+|-----------------|-----------------------------------------------------------------------------------------|
+| **conv2d**      | Out: 8 channels, In: `input_channels`, Kernel size: 5, Stride: 1, Padding: 2, Groups: 2 |
+| **GELU**        | Out: 8 channels                                                                         |
+| **conv2d**      | Out: 16 channels, Kernel size: 5, Stride: 1, Padding: 2, Groups: 4                      |
+| **GELU**        | Out: 16 channels                                                                        |
+| **fc**          | Out: 256, In: `w * h * 16`                                                              |
+| **layernorm**   | -                                                                                       |
+| **GELU**        | -                                                                                       |
+| **fc**          | 256                                                                                     |
+| **layernorm**   | -                                                                                       |
+| **GELU**        | -                                                                                       |
+| **fc**          | `output_size`                                                                           |
+| **log_softmax** | `output_size`                                                                           |
 
 ## SnakeEnv
 
-### Environment description
+### Environment
 
-The observation space consists of the entire playable space, with each position containing three channels, i.e. a tensor
-of shape `[x,y,c]` where `x` and `y` correspond to width/height and `c` is an encoding as follows:
-- `c_0` snake body
-- `c_1` snake head
-- `c_2` food
+#### Observation space:
+Fully observable with each position containing three channels, i.e. a tensor
+of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a channel encoding as follows:
+- $c_0$ snake body
+- $c_1$ snake head
+- $c_2$ food
+- $c_3$ wall
+
+#### Rewards:
+
+- REWARD_COLLISION = -30
+- REWARD_APPLE = 40
+- REWARD_MOVE = -0.25
+
+#### Action space:
+
+- UP = 0
+- RIGHT = 1
+- DOWN = 2
+- LEFT = 3
 
 ## Notes
 
@@ -48,13 +98,6 @@ $$
 - $N$ is the total number episodes. 
 
 The decay terminates when $\epsilon \approx 0.01$ by computing $c = \log_{0.99}(0.01) = 458.211$, for example
-
-#### Performance
-
-The model occasionally learns first order behaviors that are conducive to survival, limited to very simple strategies 
-like always moving up, or walking diagonally {up,right,up,right} to avoid dying for a short time. One session converged on an average 
-number of steps in the hundreds, which is large for a 10x10 grid, and clearly requires some avoidance strategies. 
-However, training is unstable and often converges early on an extremely low entropy policy.
 
 ### 2. Policy Gradient with entropy regularization
 
@@ -94,18 +137,21 @@ L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \g
 $$
 
 ## To do
-Implement:
 - Break out epsilon annealing into simple class
 - Critic network and baseline subtraction
 - Visualization:
   - basic training loss plot (split into reward and entropy terms)
-  - of trained model behavior (GIF/video)
-  - of action distributions per state
+  - trained model behavior (GIF/video)
+  - action distributions per state
 - More appropriate model for encoding observation space
-  - CNN (priority)
+  - ~~CNN (priority)~~
   - RNN
-  - GNN
+  - GNN <3
 - DQN 
   - likely important for SnakeEnv, which is essentially [Cliff World](https://distill.pub/2019/paths-perspective-on-value-learning/))
 - Asynchronous learners
+- Abstract away specific NN classes
+- Exhaustive comparison of methods
+
+
 

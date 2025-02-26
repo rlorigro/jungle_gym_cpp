@@ -75,7 +75,7 @@ void discount_rewards(vector<float>& rewards, float gamma){
 }
 
 
-void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& params, int64_t w) {
+void train_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& params, int64_t w) {
     // Epsilon is adjusted on a schedule, not fixed
     float epsilon = 0;
 
@@ -116,7 +116,7 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
             prev_action *= 0;
             prev_action[environment.get_prev_action()] = 1;
 
-            auto input = (torch::cat({environment.get_observation_space().flatten(), prev_action.flatten()}, 0));
+            auto input = environment.get_observation_space().clone();
             input += 0.001;
 
             auto log_probabilities = model->forward(input);
@@ -163,8 +163,15 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
         // cerr << "td_loss: " << td_loss << '\n';
         // cerr << "entropy_loss: " << entropy_loss << '\n';
 
+
+        // TODO: setw column printing!
         // Print some stats, increment loss using episode, update model if batch_size accumulated
-        cerr << "episode=" << e << " length=" << episode.get_size() << " entropy_loss=" << entropy_loss.item<float>()*params.lambda << " td_loss: " << td_loss.item<float>() << " epsilon: " << epsilon << '\n';
+        cerr << std::left
+        << std::setw(8) << "episode" << std::setw(8) << e
+        << std::setw(8) << "length" << std::setw(6) << episode.get_size()
+        << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
+        << std::setw(8) << "td_loss " << std::setw(12) << td_loss.item<float>()
+        << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
 
         auto loss = td_loss - params.lambda*entropy_loss;
         loss.backward();
@@ -179,7 +186,9 @@ void train_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& 
 }
 
 
-void test_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& params, int64_t w) {
+void test_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& params, int64_t w) {
+    // TODO: add model.eval!
+
     // Epsilon is adjusted on a schedule, not fixed
     float epsilon = 0;
     std::bernoulli_distribution dist(epsilon);
@@ -211,7 +220,7 @@ void test_policy_gradient(std::shared_ptr<ShallowNet>& model, Hyperparameters& p
             prev_action *= 0;
             prev_action[environment.get_prev_action()] = 1;
 
-            auto input = (torch::cat({environment.get_observation_space().flatten(), prev_action.flatten()}, 0));
+            auto input = environment.get_observation_space().clone();
             input += 0.001;
 
             auto log_action = model->forward(input);
@@ -255,7 +264,7 @@ void train_and_test(Hyperparameters& hyperparams){
 
     // Input size is the grid (which is flattened) and output size is the action space (for a policy gradient model)
     // Create a new Net. 4 is the actions space size TODO: break out var
-    auto model = std::make_shared<ShallowNet>(w*w*3 + 4, 4);
+    auto model = std::make_shared<SimpleConv>(w, w, 4, 4);
 
     train_policy_gradient(model, hyperparams, w);
     test_policy_gradient(model, hyperparams, w);

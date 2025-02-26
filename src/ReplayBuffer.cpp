@@ -36,7 +36,7 @@ void Episode::update(Tensor& log_action_probs, int64_t action_index, float rewar
 
 
 Tensor Episode::compute_entropy(const Tensor& log_distribution) const{
-    auto entropy = torch::tensor({0}, torch::dtype(torch::kFloat32).requires_grad(true));;
+    auto entropy = torch::tensor({0}, torch::dtype(torch::kFloat32));;
 
     for (size_t i=0; i < log_distribution.sizes()[0]; i++){
         entropy = entropy + torch::exp(log_distribution[i]) * log_distribution[i];
@@ -48,7 +48,7 @@ Tensor Episode::compute_entropy(const Tensor& log_distribution) const{
 
 Tensor Episode::compute_entropy_loss(bool mean=false) const{
     // Entropy depends on the output of the policy and we use it to compute loss so we require grad here
-    auto entropy_loss = torch::tensor({0}, torch::dtype(torch::kFloat32).requires_grad(true));;
+    auto entropy_loss = torch::tensor({0}, torch::dtype(torch::kFloat32));;
 
     // Compute averaged entropy term for episode action distributions
     // WARNING in-place operators discouraged for libtorch tensors that require grad/autodiff
@@ -84,7 +84,7 @@ Tensor Episode::compute_td_loss(float gamma, bool mean=false) const{
         r_prev = reward;
     }
 
-    auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32).requires_grad(true));
+    auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32));
 
     // Sum loss for each step using the action probability and the reward according to REINFORCE algorithm
     // WARNING in-place operators discouraged for libtorch tensors that require grad/autodiff

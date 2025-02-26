@@ -18,7 +18,7 @@ using namespace torch::indexing;
 namespace JungleGym{
 
 SnakeEnv::SnakeEnv(int64_t width, int64_t height):
-    observation_space(torch::zeros({width, height, 3}, torch::kFloat32)),
+    observation_space(torch::zeros({width, height, 4}, torch::kFloat32)),
     observation_space_3d(observation_space.accessor<float,3>()),
     action_space(torch::zeros({4}, torch::kFloat32)),
     generator(random_device()()),
@@ -26,12 +26,14 @@ SnakeEnv::SnakeEnv(int64_t width, int64_t height):
     height(height),
     i_permutation(0)
 {
-    if (width < 2 or height < 2) {
+    fill_wall();
+
+    if (width < 3 or height < 3) {
         throw std::runtime_error("ERROR: Cannot initialize 3-length snake in grid size < 2x2");
     }
 
-    for (int64_t i=0; i < width; i++) {
-        for (int64_t j=0; j < height; j++) {
+    for (int64_t i=1; i < width-1; i++) {
+        for (int64_t j=1; j < height-1; j++) {
             xy_permutation.emplace_back(i, j);
         }
     }
@@ -45,6 +47,7 @@ SnakeEnv::SnakeEnv(int64_t width, int64_t height):
 
 void SnakeEnv::reset() {
     observation_space *= 0;
+    fill_wall();
     generator = mt19937(random_device()());
     terminated = false;
     truncated = false;
@@ -54,6 +57,15 @@ void SnakeEnv::reset() {
     std::ranges::shuffle(xy_permutation, generator);
     i_permutation = 0;
     add_apple(true);
+}
+
+
+void SnakeEnv::fill_wall() {
+    observation_space.index({0,"...", WALL}) = 1;
+    observation_space.index({width-1,"...", WALL}) = 1;
+
+    observation_space.index({"...",0, WALL}) = 1;
+    observation_space.index({"...",height-1, WALL}) = 1;
 }
 
 
@@ -72,13 +84,11 @@ const torch::Tensor& SnakeEnv::get_observation_space() const {
 }
 
 
-bool SnakeEnv::is_valid(const coord_t& coord) const {
-    return coord.first >= 0 and coord.second >= 0 and coord.first < width and coord.second < height;
-}
-
-
 bool SnakeEnv::is_open(const coord_t& coord) const {
-    return (int64_t(round(observation_space_3d[coord.first][coord.second][SNAKE_BODY])) == 0) and (int64_t(round(observation_space_3d[coord.first][coord.second][SNAKE_HEAD])) == 0);
+    bool not_body = (int64_t(round(observation_space_3d[coord.first][coord.second][SNAKE_BODY])) == 0);
+    bool not_head = (int64_t(round(observation_space_3d[coord.first][coord.second][SNAKE_HEAD])) == 0);
+    bool not_wall = (int64_t(round(observation_space_3d[coord.first][coord.second][WALL])) == 0);
+    return not_body and not_head and not_wall;
 }
 
 
@@ -207,13 +217,6 @@ void SnakeEnv::step(int64_t a) {
 
     update_coord(a, snake.front());
 
-    if (not is_valid(snake.front())) {
-        snake.pop_front();
-        truncated = true;
-        reward = REWARD_COLLISION;
-        return;
-    }
-
     if (not is_open(snake.front())) {
         snake.pop_front();
         truncated = true;
@@ -268,8 +271,8 @@ void SnakeEnv::initialize_snake() {
     snake = {};
 
     // Guaranteed valid starting point
-    std::uniform_int_distribution<int64_t> x_dist(0, width-1);
-    std::uniform_int_distribution<int64_t> y_dist(0, height-1);
+    std::uniform_int_distribution<int64_t> x_dist(1, width-2);
+    std::uniform_int_distribution<int64_t> y_dist(1, height-2);
 
     snake.emplace_front(x_dist(generator), y_dist(generator));
 
@@ -291,7 +294,7 @@ void SnakeEnv::initialize_snake() {
 
             update_coord(a, snake.front());
 
-            if (is_valid(snake.front()) and is_open(snake.front())) {
+            if (is_open(snake.front())) {
                 // Keep track of prev action even when initializing so it can be known at start
                 observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
                 cached_action = a;
@@ -401,8 +404,9 @@ void SnakeEnv::render(bool interactive) {
                 const auto head = observation_space_3d[i_x][i_y][SNAKE_HEAD];
                 const auto body = observation_space_3d[i_x][i_y][SNAKE_BODY];
                 const auto apple = observation_space_3d[i_x][i_y][APPLE];
+                const auto wall = observation_space_3d[i_x][i_y][WALL];
 
-                SDL_SetRenderDrawColor(renderer, 255*body, 255*apple, 255*head, 255); // Red
+                SDL_SetRenderDrawColor(renderer, 125*body + 125*head, 255*apple, 255*wall, 255); // Red
                 SDL_RenderFillRect(renderer, &r);
             }
         }

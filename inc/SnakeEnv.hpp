@@ -54,6 +54,7 @@ class SnakeEnv: public Environment{
     static const int64_t SNAKE_BODY = 0;
     static const int64_t SNAKE_HEAD = 1;
     static const int64_t APPLE = 2;
+    static const int64_t WALL = 3;
 
     static constexpr float REWARD_COLLISION = -30;
     static constexpr float REWARD_APPLE = 40;
@@ -64,6 +65,7 @@ public:
     void step(int64_t a);
     void step();
     void initialize_snake();
+    void fill_wall();
     void add_apple(bool lock);
     void add_apple_unsafe();
 

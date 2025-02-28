@@ -1,43 +1,6 @@
 # jungle_gym_cpp
 For practicing libtorch and RL/ML in C++
 
-## Models
-
-### **ShallowNet**
-
-| **Layer**       | **Dimensions**   |
-|-----------------|------------------|
-| **input**       | `w*h*4`          |
-| **fc**          | 256              |
-| **layernorm**   | -                |
-| **GELU**        | -                |
-| **fc**          | 256              |
-| **layernorm**   | -                |
-| **GELU**        | -                |
-| **fc**          | 256              |
-| **layernorm**   | -                |
-| **GELU**        | -                |
-| **fc**          | `output_size`    |
-| **log_softmax** | `output_size`    |
-
-
-### **SimpleConv**
-
-| **Layer**       | **Dimensions**                                                                          |
-|-----------------|-----------------------------------------------------------------------------------------|
-| **conv2d**      | Out: 8 channels, In: `input_channels`, Kernel size: 5, Stride: 1, Padding: 2, Groups: 2 |
-| **GELU**        | Out: 8 channels                                                                         |
-| **conv2d**      | Out: 16 channels, Kernel size: 5, Stride: 1, Padding: 2, Groups: 4                      |
-| **GELU**        | Out: 16 channels                                                                        |
-| **fc**          | Out: 256, In: `w * h * 16`                                                              |
-| **layernorm**   | -                                                                                       |
-| **GELU**        | -                                                                                       |
-| **fc**          | 256                                                                                     |
-| **layernorm**   | -                                                                                       |
-| **GELU**        | -                                                                                       |
-| **fc**          | `output_size`                                                                           |
-| **log_softmax** | `output_size`                                                                           |
-
 ## SnakeEnv
 
 ### Environment
@@ -129,12 +92,50 @@ epsilon greedy sampling.
 WIP
 
 $$
-L_{\text{actor}} = - \sum_{t=0}^{T-1} \log \pi_\theta(a_t | s_t) \cdot \left[ R_t - V(s_t) \right] - \lambda \sum_{t=0}^{T-1} \sum_{a} \pi_\theta(a | s_t) \log \pi_\theta(a | s_t)
+L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] + \lambda H(\pi_\theta(a_t | s_t)) \right)
 $$
 
 $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \gamma V(s_{t+1}) \right) \right)^2
 $$
+
+## Models
+
+### **ShallowNet**
+
+| **Layer**       | **Dimensions**   |
+|-----------------|------------------|
+| **input**       | `w*h*4`          |
+| **fc**          | 256              |
+| **layernorm**   | -                |
+| **GELU**        | -                |
+| **fc**          | 256              |
+| **layernorm**   | -                |
+| **GELU**        | -                |
+| **fc**          | 256              |
+| **layernorm**   | -                |
+| **GELU**        | -                |
+| **fc**          | `output_size`    |
+| **log_softmax** | `output_size`    |
+
+
+### **SimpleConv**
+
+| **Layer**       | **Dimensions**                                                                          |
+|-----------------|-----------------------------------------------------------------------------------------|
+| **conv2d**      | Out: 8 channels, In: `input_channels`, Kernel size: 3, Stride: 1, Padding: 2, Groups: 2 |
+| **GELU**        | Out: 8 channels                                                                         |
+| **conv2d**      | Out: 16 channels, Kernel size: 3, Stride: 1, Padding: 2, Groups: 4                      |
+| **GELU**        | Out: 16 channels                                                                        |
+| **fc**          | Out: 256, In: `w * h * 16`                                                              |
+| **layernorm**   | -                                                                                       |
+| **GELU**        | -                                                                                       |
+| **fc**          | 256                                                                                     |
+| **layernorm**   | -                                                                                       |
+| **GELU**        | -                                                                                       |
+| **fc**          | `output_size`                                                                           |
+| **log_softmax** | `output_size`                                                                           |
+
 
 ## To do
 - Break out epsilon annealing into simple class

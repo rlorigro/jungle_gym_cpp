@@ -151,7 +151,7 @@ Tensor Episode::compute_critic_loss(float gamma, bool mean=false) const{
     // NOTE: log probs are negative by default so we subtract because the optimizer step is taken in the direction
     // that MINIMIZES loss.
     for (size_t i=0; i<log_action_distributions.size(); i++){
-        loss = loss + torch::pow(rewards[i] - value_predictions[i], 2);
+        loss = loss + torch::pow(rewards[i] - value_predictions[i], 2)/2;
     }
 
     if (mean){

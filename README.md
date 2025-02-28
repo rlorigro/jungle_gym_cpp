@@ -17,7 +17,7 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 
 - REWARD_COLLISION = -30
 - REWARD_APPLE = 40
-- REWARD_MOVE = -0.25
+- REWARD_MOVE = -1
 
 #### Action space:
 

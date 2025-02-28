@@ -58,7 +58,7 @@ class SnakeEnv: public Environment{
 
     static constexpr float REWARD_COLLISION = -30;
     static constexpr float REWARD_APPLE = 40;
-    static constexpr float REWARD_MOVE = -0.25;
+    static constexpr float REWARD_MOVE = -1;
 
 public:
     void step(const at::Tensor& action);

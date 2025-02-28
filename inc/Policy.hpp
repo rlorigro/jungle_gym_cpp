@@ -36,6 +36,7 @@ public:
     torch::nn::Linear fc4{nullptr};
 };
 
+
 ShallowNet::ShallowNet(int input_size, int output_size):
 input_size(input_size),
 output_size(output_size)
@@ -52,14 +53,20 @@ output_size(output_size)
 }
 
 
-// The forward method here does not take batches for RL rollouts...
-// Need to check later what shape is compatible with the optim/etc
 Tensor ShallowNet::forward(Tensor x){
     // Use one of many tensor manipulation functions.
     x = torch::gelu(layernorm1(fc1->forward(x)));
     x = torch::gelu(layernorm2(fc2->forward(x)));
     x = torch::gelu(layernorm3(fc3->forward(x)));
-    x = torch::log_softmax(fc4->forward(x), 0);
+
+    // for singleton output, assume no activation needed. e.g. critic value function.
+    if (output_size == 1) {
+        x = fc4(x);
+    }
+    else {
+        x = torch::log_softmax(fc4->forward(x), 0);
+    }
+
     return x;
 }
 
@@ -91,7 +98,7 @@ SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, in
     input_height(input_height),
     output_size(output_size)
 {
-    int k = 5;
+    int k = 3;
 
     conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, 8, k).stride(1).groups(2).padding((k-1)/2)));
     conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(8, 16, k).stride(1).groups(4).padding((k-1)/2)));
@@ -114,13 +121,16 @@ Tensor SimpleConv::forward(Tensor x){
     x = torch::flatten(x);
     x = torch::gelu(layernorm1(fc1->forward(x)));
     x = torch::gelu(layernorm2(fc2->forward(x)));
-    x = torch::log_softmax(fc3->forward(x), 0);
+
+    // for singleton output, assume no activation needed. e.g. critic value function.
+    if (output_size == 1) {
+        x = torch::gelu(fc3->forward(x));
+    }
+    else {
+        x = torch::log_softmax(fc3->forward(x), 0);
+    }
     return x;
 }
-
-//Tensor episode_loss(vector<Tensor> rewards, torch::Op){
-//
-//}
 
 
 }

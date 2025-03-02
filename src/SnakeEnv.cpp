@@ -46,6 +46,11 @@ SnakeEnv::SnakeEnv(int64_t width, int64_t height):
 
 
 void SnakeEnv::reset() {
+    reset(3);
+}
+
+
+void SnakeEnv::reset(size_t length) {
     observation_space *= 0;
     fill_wall();
     generator = mt19937(random_device()());
@@ -53,7 +58,7 @@ void SnakeEnv::reset() {
     truncated = false;
     reward = 0;
     cached_action.store(0);
-    initialize_snake();
+    initialize_snake(length);
     std::ranges::shuffle(xy_permutation, generator);
     i_permutation = 0;
     add_apple(true);
@@ -69,6 +74,57 @@ void SnakeEnv::fill_wall() {
 }
 
 
+void SnakeEnv::initialize_snake(size_t length) {
+    std::unique_lock lock(m);  // Exclusive lock for writing
+
+    snake = {};
+
+    // Guaranteed valid starting point
+    std::uniform_int_distribution<int64_t> x_dist(1, width-2);
+    std::uniform_int_distribution<int64_t> y_dist(1, height-2);
+
+    snake.emplace_front(x_dist(generator), y_dist(generator));
+
+    observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
+
+    vector<int64_t> moves = {0,1,2,3};
+
+    while (snake.size() < length) {
+        snake.push_front(snake.front());
+
+        std::shuffle(moves.begin(), moves.end(), generator);
+
+        for (size_t i=0; i<=moves.size(); i++) {
+            if (i == 4) {
+                // Rewind if failed to add anything to this snake (only possible if >4 length)
+                snake.pop_front();
+                snake.pop_front();
+                continue;
+            }
+
+            auto a = moves[i];
+
+            update_coord(a, snake.front());
+
+            if (is_open(snake.front())) {
+                // Keep track of prev action even when initializing so it can be known at start
+                observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
+                cached_action = a;
+                break;
+            }
+            else {
+                // Reset to prev position
+                snake.front() = *(++snake.begin());
+            }
+        }
+    }
+
+    observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
+
+    // unique lock expires
+}
+
+
 torch::Tensor SnakeEnv::get_action_space() const {
     return action_space;
 }
@@ -79,8 +135,32 @@ int64_t SnakeEnv::get_prev_action() const {
 }
 
 
-const torch::Tensor& SnakeEnv::get_observation_space() const {
-    return observation_space;
+/**
+ * Return a copy of the observation space that has been adjusted to make it "machine readable". I.e.,
+ * the model needs to know the sequence of blocks that make the body, in order, so we add a "decay" in "brightness"
+ * @return Modified copy of the observation space
+ */
+torch::Tensor SnakeEnv::get_observation_space() const {
+    auto o = observation_space.clone();
+
+    float a = 0.8;
+    float b = 0.5;
+    float delta = (a-b) / float(snake.size() - 2);
+
+    size_t i = 0;
+    for (auto [x,y]: snake) {
+        if (i == 0) {
+            // Don't rescale head pos
+            i++;
+            continue;
+        }
+
+        // cerr << x << ',' << y << ',' << SNAKE_BODY << '=' << a - float(i-1)*delta << ' ' << o.sizes() << '\n';
+        o.index({x,y,SNAKE_BODY}) = a - float(i-1)*delta;
+        i++;
+    }
+
+    return o;
 }
 
 
@@ -264,55 +344,6 @@ void SnakeEnv::get_neck(coord_t& coord) const {
     coord = *(++snake.begin());
 }
 
-
-void SnakeEnv::initialize_snake() {
-    std::unique_lock lock(m);  // Exclusive lock for writing
-
-    snake = {};
-
-    // Guaranteed valid starting point
-    std::uniform_int_distribution<int64_t> x_dist(1, width-2);
-    std::uniform_int_distribution<int64_t> y_dist(1, height-2);
-
-    snake.emplace_front(x_dist(generator), y_dist(generator));
-
-    observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
-
-    vector<int64_t> moves = {0,1,2,3};
-
-    while (snake.size() < 3) {
-        snake.push_front(snake.front());
-
-        std::shuffle(moves.begin(), moves.end(), generator);
-
-        for (size_t i=0; i<=moves.size(); i++) {
-            if (i == 4) {
-                throw std::runtime_error("ERROR: cannot initialize snake");
-            }
-
-            auto a = moves[i];
-
-            update_coord(a, snake.front());
-
-            if (is_open(snake.front())) {
-                // Keep track of prev action even when initializing so it can be known at start
-                observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
-                cached_action = a;
-                break;
-            }
-            else {
-                // Reset to prev position
-                snake.front() = *(++snake.begin());
-            }
-        }
-    }
-
-    observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
-
-    // unique lock expires
-}
-
-
 void SnakeEnv::render(bool interactive) {
     int32_t SCREEN_WIDTH = 600;
     int32_t SCREEN_HEIGHT = SCREEN_WIDTH;
@@ -392,26 +423,27 @@ void SnakeEnv::render(bool interactive) {
         SDL_RenderClear(renderer);
 
         lock.lock();
+        auto o = get_observation_space();
+        auto o_3d = o.accessor<float,3>();
+        lock.unlock();
 
-        for (int64_t i_x=0; i_x<observation_space.sizes()[0]; i_x++) {
-            for (int64_t i_y=0; i_y<observation_space.sizes()[1]; i_y++) {
+        for (int64_t i_x=0; i_x<o.sizes()[0]; i_x++) {
+            for (int64_t i_y=0; i_y<o.sizes()[1]; i_y++) {
                 // Rendering on Y axis is inverted, so we un-invert y
                 auto x = w*int32_t(i_x);
                 auto y = SCREEN_HEIGHT - w*int32_t(i_y) - w;
 
                 SDL_Rect r({x,y,w,w});
 
-                const auto head = observation_space_3d[i_x][i_y][SNAKE_HEAD];
-                const auto body = observation_space_3d[i_x][i_y][SNAKE_BODY];
-                const auto apple = observation_space_3d[i_x][i_y][APPLE];
-                const auto wall = observation_space_3d[i_x][i_y][WALL];
+                const auto head = o_3d[i_x][i_y][SNAKE_HEAD];
+                const auto body = o_3d[i_x][i_y][SNAKE_BODY];
+                const auto apple = o_3d[i_x][i_y][APPLE];
+                const auto wall = o_3d[i_x][i_y][WALL];
 
                 SDL_SetRenderDrawColor(renderer, 125*body + 125*head, 255*apple, 255*wall, 255); // Red
                 SDL_RenderFillRect(renderer, &r);
             }
         }
-
-        lock.unlock();
 
         // Present renderer to update the window
         SDL_RenderPresent(renderer);

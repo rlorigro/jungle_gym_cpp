@@ -30,10 +30,10 @@ class Episode{
 public:
     // Assumes distribution is already in log space and normalized, is either single dimension of length n or 2d with
     // shape [n,1]
-    [[nodiscard]] Tensor compute_entropy(const Tensor& log_distribution) const;
+    [[nodiscard]] Tensor compute_entropy(const Tensor& log_distribution, bool norm) const;
 
     // Compute the stepwise entropy for each action distribution and return the sum or mean depending on `mean`
-    [[nodiscard]] Tensor compute_entropy_loss(bool mean) const;
+    [[nodiscard]] Tensor compute_entropy_loss(bool mean, bool norm) const;
 
     // Use the action history and reward history to compute stepwise loss, discounted with decay rate gamma.
     // Return the sum or mean depending on `mean`

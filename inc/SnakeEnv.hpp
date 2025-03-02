@@ -56,35 +56,36 @@ class SnakeEnv: public Environment{
     static const int64_t APPLE = 2;
     static const int64_t WALL = 3;
 
-    static constexpr float REWARD_COLLISION = -30;
-    static constexpr float REWARD_APPLE = 40;
+    static constexpr float REWARD_COLLISION = -20;
+    static constexpr float REWARD_APPLE = 60;
     static constexpr float REWARD_MOVE = -1;
 
 public:
-    void step(const at::Tensor& action);
+    void step(const at::Tensor& action) override;
     void step(int64_t a);
     void step();
-    void initialize_snake();
+    void initialize_snake(size_t length=3);
     void fill_wall();
     void add_apple(bool lock);
     void add_apple_unsafe();
 
-    bool is_valid(const coord_t& coord) const;
-    bool is_open(const coord_t& coord) const;
+    [[nodiscard]] bool is_valid(const coord_t& coord) const;
+    [[nodiscard]] bool is_open(const coord_t& coord) const;
     void update_coord(int64_t a, coord_t& coord) const;
     void get_complement(at::Tensor& action) const;
-    int64_t get_complement(int64_t a) const;
+    [[nodiscard]] int64_t get_complement(int64_t a) const;
     void get_head(coord_t& coord) const;
     void get_neck(coord_t& coord) const;
-    int64_t get_prev_action() const;
+    [[nodiscard]] int64_t get_prev_action() const;
 
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
-    torch::Tensor get_action_space() const;
-    const torch::Tensor& get_observation_space() const;
+    [[nodiscard]] torch::Tensor get_action_space() const override;
+    [[nodiscard]] torch::Tensor get_observation_space() const override;
 
-    void reset();
-    void render(bool interactive);
-    void close();
+    void reset(size_t length);
+    void reset() override;
+    void render(bool interactive) override;
+    void close() override;
 
     SnakeEnv(int64_t width, int64_t height);
     SnakeEnv();

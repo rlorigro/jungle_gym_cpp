@@ -46,25 +46,38 @@ void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t
 }
 
 
-Tensor Episode::compute_entropy(const Tensor& log_distribution) const{
-    auto entropy = torch::tensor({0}, torch::dtype(torch::kFloat32));;
+Tensor Episode::compute_entropy(const Tensor& log_distribution, bool norm) const{
+    auto entropy = torch::tensor({0}, torch::dtype(torch::kFloat32));
+
 
     for (size_t i=0; i < log_distribution.sizes()[0]; i++){
         entropy = entropy + torch::exp(log_distribution[i]) * log_distribution[i];
     }
 
+
+    if (norm){
+        // The maximum possible entropy is log(1/A) where A is the size of the action distribution because
+        // when the dist is uniform p(x) = 1/A
+        float A = log_distribution.sizes()[0];
+        auto denom = torch::log(torch::tensor(1.0f/A));
+
+        // Keep the value negative so that we don't accidentally flip the optimization direction
+        entropy = -entropy/denom;
+    }
+
+
     return entropy;
 }
 
 
-Tensor Episode::compute_entropy_loss(bool mean=false) const{
+Tensor Episode::compute_entropy_loss(bool mean=false, bool norm=false) const{
     // Entropy depends on the output of the policy and we use it to compute loss so we require grad here
-    auto entropy_loss = torch::tensor({0}, torch::dtype(torch::kFloat32));;
+    auto entropy_loss = torch::tensor({0}, torch::dtype(torch::kFloat32));
 
     // Compute averaged entropy term for episode action distributions
     // WARNING in-place operators discouraged for libtorch tensors that require grad/autodiff
     for (const auto& dist: log_action_distributions){
-        entropy_loss = entropy_loss - compute_entropy(dist);
+        entropy_loss = entropy_loss - compute_entropy(dist,norm);
     }
 
     if (mean){

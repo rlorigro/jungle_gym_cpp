@@ -49,7 +49,7 @@ public:
     float gamma = 0.1;
 
     // For weight of entropy term in the loss function
-    float lambda = 0.001;
+    float lambda = 0.01;
 };
 
 
@@ -66,24 +66,19 @@ void train_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_pt
     // Used for deciding if we want to act greedily or sample randomly
     mt19937 generator(1337);
     std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
+    std::uniform_int_distribution<int64_t> length_dist(3,6);
 
-    torch::optim::RMSprop optimizer_actor(model_actor->parameters(), params.learn_rate);
-    torch::optim::RMSprop optimizer_critic(model_critic->parameters(), params.learn_rate);
+    torch::optim::RMSprop optimizer_actor(model_actor->parameters(), torch::optim::RMSpropOptions(params.learn_rate).weight_decay(0.001));
+    torch::optim::RMSprop optimizer_critic(model_critic->parameters(), torch::optim::RMSpropOptions(params.learn_rate).weight_decay(0.001));
+
     auto prev_action = environment.get_action_space();
 
     size_t e = 0;
 
-    float eps_terminal = 0.01;
-
-    // log_b(x) = log_e(x)/log_e(b)
-    float eps_norm = log(0.01)/log(0.99);
-
-    cerr << "Using eps_norm: " << eps_norm << " for eps_terminal: " << eps_terminal << '\n';
-
     Episode episode;
 
     while (e < params.n_episodes) {
-        environment.reset();
+        environment.reset(length_dist(generator));
         episode.clear();
 
         // exponential decay that terminates at ~0.018
@@ -95,8 +90,8 @@ void train_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_pt
             prev_action *= 0;
             prev_action[environment.get_prev_action()] = 1;
 
-            auto input = environment.get_observation_space().clone();
-            input += 0.001;
+            auto input = environment.get_observation_space();
+            input += 0.0001;
 
             // Get value prediction (singleton tensor)
             auto value_predict = model_critic->forward(input);
@@ -140,20 +135,22 @@ void train_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_pt
             e++;
         }
 
-        auto td_loss = episode.compute_td_loss(params.gamma, false, true);
+        auto td_loss = - episode.compute_td_loss(params.gamma, false, true);
+        auto entropy_loss = - episode.compute_entropy_loss(false, true);
+
+        auto actor_loss = td_loss + params.lambda*entropy_loss;
         auto critic_loss = episode.compute_critic_loss(params.gamma, true);
-        auto entropy_loss = episode.compute_entropy_loss(false);
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << std::left
         << std::setw(8)  << "episode" << std::setw(8) << e
         << std::setw(8)  << "length" << std::setw(6) << episode.get_size()
         << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
+        << std::setw(14) << "avg_entropy" << std::setw(12) << -entropy_loss.item<float>()/float(episode.get_size())
         << std::setw(8)  << "td_loss " << std::setw(12) << td_loss.item<float>()
         << std::setw(14) << "critic_loss" << std::setw(12) << critic_loss.item<float>()
         << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
 
-        auto actor_loss = td_loss - params.lambda*entropy_loss;
         actor_loss.backward(torch::Tensor(), true);
         critic_loss.backward();
 
@@ -173,12 +170,9 @@ void train_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_pt
 }
 
 
-void test_actor_critic(std::shared_ptr<SimpleConv>& model, Hyperparameters& params, int64_t w) {
-    // TODO: add model.eval!
-
+void test_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_ptr<SimpleConv>& model_critic, Hyperparameters& params, int64_t w) {
     // Epsilon is adjusted on a schedule, not fixed
     float epsilon = 0;
-    std::bernoulli_distribution dist(epsilon);
 
     SnakeEnv environment(w,w);
     auto action_space = environment.get_action_space();
@@ -190,17 +184,19 @@ void test_actor_critic(std::shared_ptr<SimpleConv>& model, Hyperparameters& para
     mt19937 generator(1337);
     std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
 
-    vector<float> rewards;
+    torch::optim::RMSprop optimizer_actor(model_actor->parameters(), params.learn_rate);
+    torch::optim::RMSprop optimizer_critic(model_critic->parameters(), params.learn_rate);
     auto prev_action = environment.get_action_space();
 
     size_t e = 0;
-
     std::thread t(&SnakeEnv::render, &environment, false);
 
     while (e < params.n_episodes) {
-        float total_reward = 0;
         environment.reset();
-        rewards.clear();
+
+        // exponential decay that terminates at ~0.018
+        // epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(size_t(eps_norm))));
+        std::bernoulli_distribution dist(epsilon);
 
         for (size_t s=0; s<params.episode_length; s++) {
             // Construct 1-hot to indicate prev action
@@ -208,35 +204,37 @@ void test_actor_critic(std::shared_ptr<SimpleConv>& model, Hyperparameters& para
             prev_action[environment.get_prev_action()] = 1;
 
             auto input = environment.get_observation_space().clone();
-            input += 0.001;
+            input += 0.0001;
 
-            auto log_action = model->forward(input);
-            auto probabilities = torch::exp(log_action);
+            // Get value prediction (singleton tensor)
+            auto value_predict = model_critic->forward(input);
+
+            // Get action distribution of the policy (shape of action space)
+            auto log_probabilities = model_actor->forward(input);
+            auto probabilities = torch::exp(log_probabilities);
+
+            cerr << probabilities << '\n';
 
             int64_t choice;
 
             if (dist(generator) == 1) {
                 choice = choice_dist(generator);
+                cerr << "random" << '\n';
             }
             else {
-                // choice = torch::argmax(probabilities).item<int64_t>();
-                choice = torch::multinomial(probabilities, 1).item<int64_t>();
+                choice = torch::argmax(probabilities).item<int64_t>();
+                // choice = torch::multinomial(probabilities, 1).item<int64_t>();
             }
-
             environment.step(choice);
-
-            rewards.emplace_back(environment.get_reward());
-            total_reward += environment.get_reward();
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
             if (environment.is_terminated() or environment.is_truncated()) {
                 break;
             }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
 
-        // Print some stats, increment loss using episode, update model if batch_size accumulated
-        cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << " epsilon: " << epsilon << '\n';
+        e++;
     }
 
     t.join();
@@ -285,7 +283,7 @@ void train_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& 
             prev_action[environment.get_prev_action()] = 1;
 
             auto input = environment.get_observation_space().clone();
-            input += 0.001;
+            input += 0.0001;
 
             auto log_probabilities = model->forward(input);
             auto probabilities = torch::exp(log_probabilities);
@@ -326,7 +324,7 @@ void train_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& 
         }
 
         auto td_loss = episode.compute_td_loss(params.gamma, false, false);
-        auto entropy_loss = episode.compute_entropy_loss(false);
+        auto entropy_loss = episode.compute_entropy_loss(false, true);
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << std::left
@@ -384,7 +382,7 @@ void test_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& p
             prev_action[environment.get_prev_action()] = 1;
 
             auto input = environment.get_observation_space().clone();
-            input += 0.001;
+            input += 0.0001;
 
             auto log_action = model->forward(input);
             auto probabilities = torch::exp(log_action);
@@ -438,7 +436,7 @@ void train_and_test(Hyperparameters& hyperparams){
         auto critic = std::make_shared<SimpleConv>(w, w, 4, 1);
 
         train_actor_critic(actor, critic, hyperparams, w);
-        // test_actor_critic(actor, critic, hyperparams, w);
+        test_actor_critic(actor, critic, hyperparams, w);
     }
     else {
         throw runtime_error("ERROR: Unsupported hyperparameter type: " + hyperparams.type);

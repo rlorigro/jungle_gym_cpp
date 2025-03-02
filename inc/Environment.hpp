@@ -32,7 +32,7 @@ public:
     virtual torch::Tensor get_action_space() const=0;
 
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
-    virtual const torch::Tensor& get_observation_space() const=0;
+    virtual torch::Tensor get_observation_space() const=0;
 
     // The reward given by the current step in the environment
     float get_reward() const;

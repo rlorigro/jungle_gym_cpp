@@ -6,7 +6,7 @@ For practicing libtorch and RL/ML in C++
 ### Environment
 
 #### Observation space:
-Fully observable with each position containing three channels, i.e. a tensor
+Fully observable with each position containing $c$ channels, i.e. a tensor
 of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a channel encoding as follows:
 - $c_0$ snake body
 - $c_1$ snake head

@@ -121,21 +121,8 @@ $$
 
 ### **SimpleConv**
 
-| **Layer**       | **Dimensions**                                                                          |
-|-----------------|-----------------------------------------------------------------------------------------|
-| **conv2d**      | Out: 8 channels, In: `input_channels`, Kernel size: 3, Stride: 1, Padding: 2, Groups: 2 |
-| **GELU**        | Out: 8 channels                                                                         |
-| **conv2d**      | Out: 16 channels, Kernel size: 3, Stride: 1, Padding: 2, Groups: 4                      |
-| **GELU**        | Out: 16 channels                                                                        |
-| **fc**          | Out: 256, In: `w * h * 16`                                                              |
-| **layernorm**   | -                                                                                       |
-| **GELU**        | -                                                                                       |
-| **fc**          | 256                                                                                     |
-| **layernorm**   | -                                                                                       |
-| **GELU**        | -                                                                                       |
-| **fc**          | `output_size`                                                                           |
-| **log_softmax** | `output_size`                                                                           |
-
+Densenet with layer grouping, 3 convolutions (stride 1, kernel of 3)
+CBAM channel/spatial attention
 
 ## To do
 - Print critic's value estimation for every state during test demo

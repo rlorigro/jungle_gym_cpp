@@ -121,8 +121,8 @@ $$
 
 ### **SimpleConv**
 
-Densenet with layer grouping, 3 convolutions (stride 1, kernel of 3)
-CBAM channel/spatial attention
+- Densenet with layer grouping, 3 convolutions (stride 1, kernel of 3)
+- CBAM channel/spatial attention
 
 ## To do
 - Print critic's value estimation for every state during test demo

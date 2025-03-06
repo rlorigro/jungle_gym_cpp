@@ -178,31 +178,32 @@ SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, in
     input_width(input_width),
     input_height(input_height),
     output_size(output_size),
-    spatial_map(input_width, input_height, 32),
-    channel_map(32, 2)
+    spatial_map(input_width, input_height, input_channels+8+16+32),
+    channel_map(input_channels+8+16+32, 2)
 {
     int k = 3;
 
     conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, 8, k).stride(1).groups(1).padding((k-1)/2)));
-    conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(8, 16, k).stride(1).groups(1).padding((k-1)/2)));
-    conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(16, 32, k).stride(1).groups(1).padding((k-1)/2)));
+    conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8, 16, k).stride(1).groups(2).padding((k-1)/2)));
+    conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8+16, 32, k).stride(1).groups(4).padding((k-1)/2)));
 
     // Construct and register two Linear submodules.
-    fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*32, 256));
-    fc2 = register_module("fc2", torch::nn::Linear(256, 256));
+    fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*(input_channels+8+16+32), 512));
+    fc2 = register_module("fc2", torch::nn::Linear(512, 256));
     fc3 = register_module("fc3", torch::nn::Linear(256, output_size));
 
-    layernorm1 = register_module("layernorm1", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
+    layernorm1 = register_module("layernorm1", torch::nn::LayerNorm(torch::nn::LayerNormOptions({512})));
     layernorm2 = register_module("layernorm2", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
 }
 
 
 /**
  * Use the CBAM spatial/channel attention module (without pooling on spatial attention)
+ * Use densenet architecture for conv layers
  * @param x input with shape [W,H,C], no batches needed for RL policy
  * @return y
  */
-Tensor SimpleConv::forward(Tensor x){
+Tensor SimpleConv::forward(Tensor x) {
     // Shape munging into [C,W,H]
     x = torch::permute(x,{2,0,1});
 
@@ -210,14 +211,25 @@ Tensor SimpleConv::forward(Tensor x){
     auto x_input = torch::unsqueeze(x,0);
 
     // Initial convolutions
-    x = torch::gelu(conv1->forward(x_input));
-    x = torch::gelu(conv2->forward(x));
-    auto x_conv = torch::gelu(conv3->forward(x));
+    auto x_conv1 = torch::gelu(conv1->forward(x_input));
+    x = torch::cat({x_input, x_conv1}, 1);
+
+    auto x_conv2 = torch::gelu(conv2->forward(x));
+    x = torch::cat({x_input, x_conv1, x_conv2}, 1);
+
+    auto x_conv3 = torch::gelu(conv3->forward(x));
+    x = torch::cat({x_input, x_conv1, x_conv2, x_conv3}, 1);
+
+    // cerr << x_input.sizes() << '\n';
+    // cerr << x_conv1.sizes() << '\n';
+    // cerr << x_conv2.sizes() << '\n';
+    // cerr << x_conv3.sizes() << '\n';
+    // cerr << x.sizes() << '\n';
 
     // Attention mapping
-    x = x_conv*channel_map.forward(x_conv);
-    x = x*spatial_map.forward(x);
-    x = x + x_conv;
+    auto c = x*channel_map.forward(x);
+    auto s = c*spatial_map.forward(c);
+    x = x + s;
 
     // Output/prediction layers
     x = torch::flatten(x);

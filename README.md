@@ -15,9 +15,9 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 
 #### Rewards:
 
-- REWARD_COLLISION = -30
-- REWARD_APPLE = 40
-- REWARD_MOVE = -1
+- REWARD_COLLISION = -1
+- REWARD_APPLE = 1
+- REWARD_MOVE = -0.05
 
 #### Action space:
 
@@ -138,18 +138,22 @@ $$
 
 
 ## To do
+- Print critic's value estimation for every state during test demo
+- plot attention map 
+- implement a3c (now currently a2c)
 - Break out epsilon annealing into simple class
-- Critic network and baseline subtraction
+- ~~Critic network and baseline subtraction~~
 - Visualization:
   - basic training loss plot (split into reward and entropy terms)
-  - trained model behavior (GIF/video)
+  - ~~trained model behavior~~ 
+    - save as GIF/video
   - action distributions per state
 - More appropriate model for encoding observation space
   - ~~CNN (priority)~~
   - RNN
   - GNN <3
 - DQN 
-  - likely important for SnakeEnv, which is essentially [Cliff World](https://distill.pub/2019/paths-perspective-on-value-learning/))
+  - likely important for SnakeEnv, which is essentially [Cliff World](https://distill.pub/2019/paths-perspective-on-value-learning/)
 - Asynchronous learners
 - Abstract away specific NN classes
 - Exhaustive comparison of methods

@@ -249,8 +249,8 @@ void SnakeEnv::add_apple_unsafe() {
     }
 
     // This should be unreachable because it means all squares have been checked
-    // Will deal with this error later (good problem to have)
-    throw runtime_error("ERROR: cannot allocate apple: you win");
+    // Otherwise the game has been "won"
+    terminated = true;
 }
 
 

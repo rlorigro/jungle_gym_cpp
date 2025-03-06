@@ -37,7 +37,7 @@ public:
 
     // Use the action history and reward history to compute stepwise loss, discounted with decay rate gamma.
     // Return the sum or mean depending on `mean`
-    [[nodiscard]] Tensor compute_td_loss(float gamma, bool mean, bool advantage) const;
+    [[nodiscard]] Tensor compute_td_loss(float gamma, bool mean, bool advantage=false, bool terminal=false) const;
 
     // This corresponds to the MSE of the discounted reward vs predicted value, for each step in retrospect.
     // Return the sum or mean depending on `mean`

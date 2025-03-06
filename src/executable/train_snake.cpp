@@ -40,7 +40,7 @@ using std::min;
 class Hyperparameters {
 public:
     string type = "pg";
-    size_t episode_length = 200;
+    size_t episode_length = 100;
     size_t n_episodes = 2000;
     size_t batch_size = 16;
     float learn_rate = 5e-5;
@@ -68,8 +68,8 @@ void train_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_pt
     std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
     std::uniform_int_distribution<int64_t> length_dist(3,6);
 
-    torch::optim::RMSprop optimizer_actor(model_actor->parameters(), torch::optim::RMSpropOptions(params.learn_rate).weight_decay(0.001));
-    torch::optim::RMSprop optimizer_critic(model_critic->parameters(), torch::optim::RMSpropOptions(params.learn_rate).weight_decay(0.001));
+    torch::optim::RMSprop optimizer_actor(model_actor->parameters(), torch::optim::RMSpropOptions(params.learn_rate));
+    torch::optim::RMSprop optimizer_critic(model_critic->parameters(), torch::optim::RMSpropOptions(params.learn_rate));
 
     auto prev_action = environment.get_action_space();
 
@@ -128,30 +128,25 @@ void train_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_pt
             }
         }
 
-        if (episode.get_size() < 4) {
-            continue;
-        }
-        else {
-            e++;
-        }
+        e++;
 
-        auto td_loss = - episode.compute_td_loss(params.gamma, false, true);
-        auto entropy_loss = - episode.compute_entropy_loss(false, true);
+        auto td_loss = episode.compute_td_loss(params.gamma, false, true, environment.is_terminated());
+        auto entropy_loss = episode.compute_entropy_loss(false, false);
 
-        auto actor_loss = td_loss + params.lambda*entropy_loss;
-        auto critic_loss = episode.compute_critic_loss(params.gamma, true);
+        auto actor_loss = td_loss - params.lambda*entropy_loss;
+        auto critic_loss = episode.compute_critic_loss(params.gamma, false);
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << std::left
         << std::setw(8)  << "episode" << std::setw(8) << e
         << std::setw(8)  << "length" << std::setw(6) << episode.get_size()
         << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
-        << std::setw(14) << "avg_entropy" << std::setw(12) << -entropy_loss.item<float>()/float(episode.get_size())
+        << std::setw(14) << "avg_entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
         << std::setw(8)  << "td_loss " << std::setw(12) << td_loss.item<float>()
         << std::setw(14) << "critic_loss" << std::setw(12) << critic_loss.item<float>()
         << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
 
-        actor_loss.backward(torch::Tensor(), true);
+        actor_loss.backward();
         critic_loss.backward();
 
         // Periodically apply the accumulated gradient to the model
@@ -215,16 +210,9 @@ void test_actor_critic(std::shared_ptr<SimpleConv>& model_actor, std::shared_ptr
 
             cerr << probabilities << '\n';
 
-            int64_t choice;
+            int64_t choice = torch::argmax(probabilities).item<int64_t>();
+            // choice = torch::multinomial(probabilities, 1).item<int64_t>();
 
-            if (dist(generator) == 1) {
-                choice = choice_dist(generator);
-                cerr << "random" << '\n';
-            }
-            else {
-                choice = torch::argmax(probabilities).item<int64_t>();
-                // choice = torch::multinomial(probabilities, 1).item<int64_t>();
-            }
             environment.step(choice);
 
             if (environment.is_terminated() or environment.is_truncated()) {
@@ -316,15 +304,10 @@ void train_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& 
             }
         }
 
-        if (episode.get_size() < 4) {
-            continue;
-        }
-        else {
-            e++;
-        }
+        e++;
 
         auto td_loss = episode.compute_td_loss(params.gamma, false, false);
-        auto entropy_loss = episode.compute_entropy_loss(false, true);
+        auto entropy_loss = episode.compute_entropy_loss(false, false);
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << std::left
@@ -349,11 +332,7 @@ void train_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& 
 
 void test_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& params, int64_t w) {
     // TODO: add model.eval!
-
-    // Epsilon is adjusted on a schedule, not fixed
-    float epsilon = 0;
-    std::bernoulli_distribution dist(epsilon);
-
+\
     SnakeEnv environment(w,w);
     auto action_space = environment.get_action_space();
     const auto observation_space = environment.get_observation_space();
@@ -389,13 +368,8 @@ void test_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& p
 
             int64_t choice;
 
-            if (dist(generator) == 1) {
-                choice = choice_dist(generator);
-            }
-            else {
-                // choice = torch::argmax(probabilities).item<int64_t>();
-                choice = torch::multinomial(probabilities, 1).item<int64_t>();
-            }
+            // choice = torch::argmax(probabilities).item<int64_t>();
+            choice = torch::multinomial(probabilities, 1).item<int64_t>();
 
             environment.step(choice);
 
@@ -410,7 +384,7 @@ void test_policy_gradient(std::shared_ptr<SimpleConv>& model, Hyperparameters& p
         }
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
-        cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << " epsilon: " << epsilon << '\n';
+        cerr << "episode=" << e << " step=" << rewards.size() << " total_reward=" << total_reward << '\n';
     }
 
     t.join();

@@ -5,7 +5,10 @@
 #include <torch/torch.h>
 #include <random>
 #include <mutex>
+#include <memory>
 
+using std::shared_ptr;
+using std::make_shared;
 using std::shared_mutex;
 using std::mt19937;
 
@@ -26,7 +29,7 @@ public:
     virtual ~Environment() = default;
 
     // The action tensor is the same dimension as the object returned by action_space()
-    virtual void step(const torch::Tensor& action)=0;
+    virtual void step(int64_t choice)=0;
 
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
     virtual torch::Tensor get_action_space() const=0;
@@ -49,6 +52,9 @@ public:
     virtual void reset()=0;
     virtual void render(bool interactive)=0;
     virtual void close()=0;
+
+    // Needed for copying in dynamic dispatch
+    virtual shared_ptr<Environment> clone() const=0;
 
 };
 

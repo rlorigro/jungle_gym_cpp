@@ -50,7 +50,7 @@ include_directories(
 # Define our shared library sources. NOT test/executables.
 set(SOURCES
         src/Environment.cpp
-        src/ReplayBuffer.cpp
+        src/Episode.cpp
         src/SnakeEnv.cpp
 )
 

@@ -58,7 +58,7 @@ void SnakeEnv::reset(size_t length) {
     truncated = false;
     reward = 0;
     cached_action.store(0);
-    initialize_snake(length);
+    initialize_snake();
     std::ranges::shuffle(xy_permutation, generator);
     i_permutation = 0;
     add_apple(true);
@@ -74,14 +74,16 @@ void SnakeEnv::fill_wall() {
 }
 
 
-void SnakeEnv::initialize_snake(size_t length) {
-    std::unique_lock lock(m);  // Exclusive lock for writing
-
-    snake = {};
+void SnakeEnv::initialize_snake() {
+    std::uniform_int_distribution<size_t> length_dist(initial_length_min,initial_length_max);
 
     // Guaranteed valid starting point
     std::uniform_int_distribution<int64_t> x_dist(1, width-2);
     std::uniform_int_distribution<int64_t> y_dist(1, height-2);
+
+    // Exclusive lock for writing
+    std::unique_lock lock(m);
+    snake = {};
 
     snake.emplace_front(x_dist(generator), y_dist(generator));
 
@@ -89,7 +91,7 @@ void SnakeEnv::initialize_snake(size_t length) {
 
     vector<int64_t> moves = {0,1,2,3};
 
-    while (snake.size() < length) {
+    while (snake.size() < length_dist(generator)) {
         snake.push_front(snake.front());
 
         std::shuffle(moves.begin(), moves.end(), generator);
@@ -269,14 +271,6 @@ void SnakeEnv::add_apple(bool use_lock) {
 // Definitions for the virtual functions
 void SnakeEnv::step() {
     step(cached_action);
-}
-
-
-// Definitions for the virtual functions
-void SnakeEnv::step(const torch::Tensor& action) {
-    auto a = int64_t(action.argmax(0).item<int64_t>());
-
-    step(a);
 }
 
 
@@ -461,6 +455,10 @@ void SnakeEnv::render(bool interactive) {
 
 void SnakeEnv::close() {
     // Implement close logic
+}
+
+shared_ptr<Environment> SnakeEnv::clone() const{
+    return make_shared<SnakeEnv>(width, height);
 }
 
 

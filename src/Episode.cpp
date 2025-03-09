@@ -1,4 +1,4 @@
-#include "ReplayBuffer.hpp"
+#include "Episode.hpp"
 
 #include <ranges>
 
@@ -151,6 +151,9 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
     // that MINIMIZES loss.
     for (size_t i=start; i<stop; i++){
         if (advantage){
+            // If using advantage, we want to train the model to maximize the "advantage" over the expected value
+            // of the next state, i.e. Q(s_t, a_t) - V(s_t), both normalizing the reward and encouraging choices
+            // that are "advantageous"
             // cerr << "L=" << loss.item<float>() << " l=" << log_action_distributions[i][actions[i]].item<float>()*(td_rewards[i] - value_predictions[i].item<float>()) << "\tlog_p=" << log_action_distributions[i][actions[i]].item<float>() << "\tR=" << td_rewards[i] << "\tr=" << rewards[i] << "\tV=" << value_predictions[i].item<float>() << '\n';
             loss = loss - log_action_distributions[i][actions[i]]*(td_rewards[i] - value_predictions[i].item<float>());
         }
@@ -169,8 +172,8 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
 }
 
 
-Tensor Episode::compute_critic_loss(float gamma, bool mean=false) const{
-    if (gamma < 0 or gamma >=1){
+Tensor Episode::compute_critic_loss(float gamma, bool mean, bool terminal) const{
+    if (gamma < 0 or gamma >= 1){
         throw runtime_error("ERROR: gamma must be in range [0,1)");
     }
 
@@ -181,30 +184,40 @@ Tensor Episode::compute_critic_loss(float gamma, bool mean=false) const{
 
     float r_prev = 0;
 
+    // If non-terminal episode, then simply approximate the future reward with the last value function,
+    // and do not use last step for training
+    if (not terminal) {
+        if (rewards.empty()) {
+            throw runtime_error("ERROR: cannot compute advantage loss for non-terminal episode without value predictions");
+        }
+        r_prev = rewards.back();
+    }
+
+    auto stop = int64_t(rewards.size() - terminal);
+    auto start = 0;
+
+    // cerr << start << ',' << stop << ',' << rewards.size() << ',' << r_prev << '\n';
+
     vector<float> td_rewards = rewards;
 
     // Reverse iterate and apply recurrence relation with gamma
-    for(auto& reward: std::ranges::reverse_view(td_rewards)){
-        reward = reward + gamma*r_prev;
-        r_prev = reward;
+    for(int64_t i=stop-1; i>=start; i--){
+        td_rewards[i] = td_rewards[i] + gamma*r_prev;
+        r_prev = td_rewards[i];
     }
 
-    auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32));
+    // Initialize loss
+    auto loss = torch::zeros({}, torch::dtype(torch::kFloat32));
 
-    // cerr << "critic" << '\n';
-    // Sum loss for each step using the action probability and the reward according to REINFORCE algorithm
-    // WARNING in-place operators discouraged for libtorch tensors that require grad/autodiff
-    //
-    // NOTE: log probs are negative by default so we subtract because the optimizer step is taken in the direction
-    // that MINIMIZES loss.
-    for (size_t i=0; i<log_action_distributions.size(); i++){
-        // cerr << "l=" << torch::pow(td_rewards[i] - value_predictions[i], 2).item<float>() << "\tr=" << rewards[i]  << "\tR=" << td_rewards[i] << "\tV=" << value_predictions[i].item<float>() << '\n';
-        loss = loss + torch::pow(td_rewards[i] - value_predictions[i], 2)/2;
+    // Sum the squared error loss for each time step
+    for (size_t i = start; i < stop; i++) {
+        // Compute squared loss between the predicted value and the target return
+        loss = loss + torch::pow(td_rewards[i] - value_predictions[i], 2) / 2;
     }
-    // cerr << '\n';
 
-    if (mean){
-        loss = loss / log_action_distributions.size();
+    // If requested, average the loss
+    if (mean) {
+        loss = loss / td_rewards.size();
     }
 
     return loss;

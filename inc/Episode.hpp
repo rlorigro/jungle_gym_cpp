@@ -41,7 +41,7 @@ public:
 
     // This corresponds to the MSE of the discounted reward vs predicted value, for each step in retrospect.
     // Return the sum or mean depending on `mean`
-    [[nodiscard]] Tensor compute_critic_loss(float gamma, bool mean) const;
+    [[nodiscard]] Tensor compute_critic_loss(float gamma, bool mean, bool terminal) const;
 
     /**
      *

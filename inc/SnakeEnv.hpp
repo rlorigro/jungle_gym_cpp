@@ -6,11 +6,14 @@
 #include <random>
 #include <array>
 #include <utility>
+#include <memory>
 #include <deque>
 #include <atomic>
 #include <vector>
 
 using std::deque;
+using std::shared_ptr;
+using std::make_shared;
 using std::pair;
 using std::mt19937;
 using std::array;
@@ -44,6 +47,9 @@ class SnakeEnv: public Environment{
     int64_t width;
     int64_t height;
 
+    size_t initial_length_min = 3;
+    size_t initial_length_max = 6;
+
     int64_t i_permutation = 0;
 
     static const int64_t UP = 0;
@@ -61,10 +67,9 @@ class SnakeEnv: public Environment{
     static constexpr float REWARD_MOVE = -0.05;
 
 public:
-    void step(const at::Tensor& action) override;
-    void step(int64_t a);
+    void step(int64_t a) override;
     void step();
-    void initialize_snake(size_t length=3);
+    void initialize_snake();
     void fill_wall();
     void add_apple(bool lock);
     void add_apple_unsafe();
@@ -86,6 +91,7 @@ public:
     void reset() override;
     void render(bool interactive) override;
     void close() override;
+    shared_ptr<Environment> clone() const override;
 
     SnakeEnv(int64_t width, int64_t height);
     SnakeEnv();

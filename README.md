@@ -126,9 +126,10 @@ $$
 
 ## Results
 
-An example of a mildly successful Policy Gradient agent trained with entropy regularization:
+An example of a mildly successful Policy Gradient agent trained with entropy regularization. You can see that it has 
+converged on a circling behavior for self-avoidance, and it biases its circular motion toward the apple, stochastically.
 
-![Alt Text](data/PG_demo.gif)
+![Alt Text](data/output.gif)
 
 WIP
 

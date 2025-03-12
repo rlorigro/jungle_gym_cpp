@@ -128,7 +128,7 @@ $$
 
 An example of a mildly successful Policy Gradient agent trained with entropy regularization:
 
-![Alt Text](./data/image.gif)
+![Alt Text](data/image.gif)
 
 WIP
 

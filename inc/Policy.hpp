@@ -14,6 +14,8 @@ class Model : public torch::nn::Module {
 public:
     // Implement the Net's algorithm.
     virtual Tensor forward(Tensor x)=0;
+
+    virtual shared_ptr<Model> clone()=0;
 };
 
 
@@ -27,6 +29,8 @@ public:
 
     // Implement the Net's algorithm.
     inline Tensor forward(Tensor x);
+
+    inline shared_ptr<Model> clone();
 
     // Use one of many "standard library" modules.
     torch::nn::Linear fc1{nullptr};
@@ -73,23 +77,37 @@ Tensor ShallowNet::forward(Tensor x){
 }
 
 
+shared_ptr<Model> ShallowNet::clone() {
+    return make_shared<ShallowNet>(input_size, output_size);
+}
+
+
 // convolutional network
 class SpatialAttention : public Model {
 public:
     int input_width;
     int input_height;
+    int input_channels;
 
     inline SpatialAttention(int input_width, int input_height, int input_channels);
 
     inline Tensor forward(Tensor x) override;
 
+    inline shared_ptr<Model> clone();
+
     torch::nn::Conv2d conv1{nullptr};
 };
 
 
+shared_ptr<Model> SpatialAttention::clone() {
+    return make_shared<SpatialAttention>(input_width, input_height, input_channels);
+}
+
+
 SpatialAttention::SpatialAttention(int input_width, int input_height, int input_channels):
     input_width(input_width),
-    input_height(input_height)
+    input_height(input_height),
+    input_channels(input_channels)
 {
     conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, 1, 1).stride(1).padding(0)));
 }
@@ -101,12 +119,17 @@ Tensor SpatialAttention::forward(Tensor x){
 }
 
 
-class ChannelAttention : public torch::nn::Module {
+class ChannelAttention : public Model {
 public:
+    int64_t in_channels;
+    int64_t reduction_ratio;
+
     // Constructor
     explicit ChannelAttention(int64_t in_channels, int64_t reduction_ratio=2):
         fc1(torch::nn::Linear(in_channels * 2, in_channels / reduction_ratio)),  // First FC layer (reduction)
-        fc2(torch::nn::Linear(in_channels / reduction_ratio, in_channels))
+        fc2(torch::nn::Linear(in_channels / reduction_ratio, in_channels)),
+        in_channels(in_channels),
+        reduction_ratio(reduction_ratio)
     {
         register_module("fc1", fc1);
         register_module("fc2", fc2);
@@ -143,21 +166,30 @@ public:
         return attention_map;
     }
 
+    inline shared_ptr<Model> clone();
+
 private:
     torch::nn::Linear fc1{nullptr}, fc2{nullptr}; // Fully connected layers
 };
 
+
+shared_ptr<Model> ChannelAttention::clone() {
+    return make_shared<ChannelAttention>(in_channels, reduction_ratio);
+}
 
 // convolutional network
 class SimpleConv : public Model {
 public:
     int input_width;
     int input_height;
+    int input_channels;
     int output_size;
 
     inline SimpleConv(int input_width, int input_height, int input_channels, int output_size);
 
     inline Tensor forward(Tensor x);
+
+    inline shared_ptr<Model> clone() override;
 
     torch::nn::Conv2d conv1{nullptr};
     torch::nn::Conv2d conv2{nullptr};
@@ -174,9 +206,15 @@ public:
 };
 
 
+shared_ptr<Model> SimpleConv::clone() {
+    return make_shared<SimpleConv>(input_width, input_height, input_channels, output_size);
+}
+
+
 SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, int output_size):
     input_width(input_width),
     input_height(input_height),
+    input_channels(input_channels),
     output_size(output_size),
     spatial_map(input_width, input_height, input_channels+8+16+32),
     channel_map(input_channels+8+16+32, 2)
@@ -184,16 +222,16 @@ SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, in
     int k = 3;
 
     conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, 8, k).stride(1).groups(1).padding((k-1)/2)));
-    conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8, 16, k).stride(1).groups(2).padding((k-1)/2)));
-    conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8+16, 32, k).stride(1).groups(4).padding((k-1)/2)));
+    conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8, 16, k).stride(1).groups(1).padding((k-1)/2)));
+    conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8+16, 32, k).stride(1).groups(1).padding((k-1)/2)));
 
     // Construct and register two Linear submodules.
-    fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*(input_channels+8+16+32), 512));
-    fc2 = register_module("fc2", torch::nn::Linear(512, 256));
-    fc3 = register_module("fc3", torch::nn::Linear(256, output_size));
+    fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*(input_channels+8+16+32), 256));
+    fc2 = register_module("fc2", torch::nn::Linear(256, 128));
+    fc3 = register_module("fc3", torch::nn::Linear(128, output_size));
 
-    layernorm1 = register_module("layernorm1", torch::nn::LayerNorm(torch::nn::LayerNormOptions({512})));
-    layernorm2 = register_module("layernorm2", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
+    layernorm1 = register_module("layernorm1", torch::nn::LayerNorm(torch::nn::LayerNormOptions({256})));
+    layernorm2 = register_module("layernorm2", torch::nn::LayerNorm(torch::nn::LayerNormOptions({128})));
 }
 
 

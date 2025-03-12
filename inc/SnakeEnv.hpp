@@ -63,7 +63,7 @@ class SnakeEnv: public Environment{
     static const int64_t WALL = 3;
 
     static constexpr float REWARD_COLLISION = -1;
-    static constexpr float REWARD_APPLE = 1;
+    static constexpr float REWARD_APPLE = 3;
     static constexpr float REWARD_MOVE = -0.05;
 
 public:

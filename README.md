@@ -124,6 +124,14 @@ $$
 - Densenet with layer grouping, 3 convolutions (stride 1, kernel of 3)
 - CBAM channel/spatial attention
 
+## Results
+
+An example of a mildly successful Policy Gradient agent trained with entropy regularization:
+
+![Alt Text](./data/image.gif)
+
+WIP
+
 ## To do
 - Print critic's value estimation for every state during test demo
 - plot attention map 

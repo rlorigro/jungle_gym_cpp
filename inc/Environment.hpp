@@ -44,9 +44,10 @@ public:
     // negative. An example is reaching the goal state or moving into the lava from the Sutton and Barto Gridworld
     bool is_terminated() const;
 
-    // Whether the truncation condition outside the scope of the MDP is satisfied. Typically, this is a timelimit, but
-    // could also be used to indicate an agent physically going out of bounds. Can be used to end the episode
-    // prematurely before a terminal state is reached. If true, the user needs to call reset()
+    // Whether the truncation condition outside the scope of the MDP is satisfied. Can be used to end the episode
+    // prematurely before a terminal state is reached. If true, the user needs to call reset(). For the purpose
+    // of this library, this flag DOES NOT cover time limits, as it is cleaner to indicate that separately as an agent
+    // hyperparameter for algos like A3C which rely on short time limits.
     bool is_truncated() const;
 
     virtual void reset()=0;

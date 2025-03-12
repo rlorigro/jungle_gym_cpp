@@ -51,6 +51,9 @@ void SnakeEnv::reset() {
 
 
 void SnakeEnv::reset(size_t length) {
+    // Exclusive lock for writing
+    std::unique_lock lock(m);
+
     observation_space *= 0;
     fill_wall();
     generator = mt19937(random_device()());
@@ -99,6 +102,7 @@ void SnakeEnv::initialize_snake() {
         for (size_t i=0; i<=moves.size(); i++) {
             if (i == 4) {
                 // Rewind if failed to add anything to this snake (only possible if >4 length)
+                observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 0;
                 snake.pop_front();
                 snake.pop_front();
                 continue;
@@ -293,7 +297,7 @@ void SnakeEnv::step(int64_t a) {
 
     if (not is_open(snake.front())) {
         snake.pop_front();
-        truncated = true;
+        terminated = true;
         reward = REWARD_COLLISION;
         return;
     }

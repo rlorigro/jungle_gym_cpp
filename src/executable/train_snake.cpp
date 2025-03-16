@@ -4,6 +4,7 @@
 #include "SnakeEnv.hpp"
 #include "Policy.hpp"
 #include "A2CAgent.hpp"
+#include "A3CAgent.hpp"
 #include "PGAgent.hpp"
 #include "CLI11.hpp"
 
@@ -58,6 +59,15 @@ void train_and_test(Hyperparameters& hyperparams, string type){
         shared_ptr<SimpleConv> critic = make_shared<SimpleConv>(w,w,4,1);
 
         A2CAgent agent(hyperparams, actor, critic);
+        agent.train(env);
+        agent.test(env);
+    }
+    else if (type == "a3c") {
+        shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
+        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,4);
+        shared_ptr<SimpleConv> critic = make_shared<SimpleConv>(w,w,4,1);
+
+        A3CAgent agent(hyperparams, actor, critic, 1);
         agent.train(env);
         agent.test(env);
     }

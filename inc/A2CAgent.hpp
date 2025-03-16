@@ -5,8 +5,10 @@
 #include "Environment.hpp"
 #include "Episode.hpp"
 #include "Policy.hpp"
+#include <functional>
 #include <memory>
 
+using std::function;
 using std::shared_ptr;
 using std::make_shared;
 
@@ -27,8 +29,20 @@ class A2CAgent {
 
 public:
     inline A2CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic);
+
     inline void train(shared_ptr<const Environment> env);
     inline void test(shared_ptr<const Environment> env);
+
+    // Additional signature for access to internal model params and optimizers, for use with the A3C algo for param sharing
+    /**
+     *
+     * @param env the environment to train on
+     * @param f method for A3C parameter syncing. Return true to skip subsequent worker optimize::step(), if desired
+     */
+    inline void train(
+        shared_ptr<const Environment> env,
+        const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic)>& f
+        );
 };
 
 
@@ -50,7 +64,18 @@ A2CAgent::A2CAgent(const Hyperparameters& params, shared_ptr<Model> actor, share
 }
 
 
-void A2CAgent::train(shared_ptr<const Environment> env){
+void A2CAgent::train(shared_ptr<const Environment> env) {
+    // By default, don't need to do anything with the internals for vanilla A2C. Instead provide null function.
+    // Returning false results in default worker-specific optimizer::step().
+    auto f_null = [&](
+        shared_ptr<Model> actor,
+        shared_ptr<Model> critic){return false;};
+
+    train(env, f_null);
+}
+
+
+void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic)>& f){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
@@ -134,17 +159,25 @@ void A2CAgent::train(shared_ptr<const Environment> env){
         actor_loss.backward();
         critic_loss.backward();
 
-        // Periodically apply the accumulated gradient to the model
-        if (e % params.batch_size == 0){
-            optimizer_actor.step();
-            optimizer_actor.zero_grad();
-        }
+        // False by default, true if using A3C parameter sync fn. If using A3C the grads are sent to the master params
+        // instead and this worker's model is updated by fetching the master params, so no local step() is needed.
+        bool skip_step = f(actor, critic);
 
         // Periodically apply the accumulated gradient to the model
         // if (e % std::max(params.batch_size/2,size_t(1)) == 0){
         if (e % params.batch_size == 0){
-            optimizer_critic.step();
+            if (not skip_step){
+                optimizer_critic.step();
+            }
             optimizer_critic.zero_grad();
+        }
+
+        // Periodically apply the accumulated gradient to the model
+        if (e % params.batch_size == 0){
+            if (not skip_step){
+                optimizer_actor.step();
+            }
+            optimizer_actor.zero_grad();
         }
     }
 }

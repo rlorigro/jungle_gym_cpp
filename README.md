@@ -142,7 +142,7 @@ WIP
 - Visualization:
   - basic training loss plot (split into reward and entropy terms)
   - ~~trained model behavior~~ 
-    - save as GIF/video
+    - save as GIF/video (automatically)
   - action distributions per state
 - More appropriate model for encoding observation space
   - ~~CNN (priority)~~
@@ -150,8 +150,7 @@ WIP
   - GNN <3
 - DQN 
   - likely important for SnakeEnv, which is essentially [Cliff World](https://distill.pub/2019/paths-perspective-on-value-learning/)
-- Asynchronous learners
-- Abstract away specific NN classes
+- ~~Abstract away specific NN classes~~
 - Exhaustive comparison of methods
 
 

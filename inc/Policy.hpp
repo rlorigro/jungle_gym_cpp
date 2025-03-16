@@ -15,6 +15,10 @@ public:
     // Implement the Net's algorithm.
     virtual Tensor forward(Tensor x)=0;
 
+    /**
+     * A weak form of "clone" which simply initializes a copy with the same args. Does NOT clone model weights/biases.
+     * @return
+     */
     virtual shared_ptr<Model> clone()=0;
 };
 

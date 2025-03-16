@@ -66,13 +66,14 @@ class SnakeEnv: public Environment{
     static constexpr float REWARD_APPLE = 3;
     static constexpr float REWARD_MOVE = -0.05;
 
+    void initialize_snake();
+    void add_apple_unsafe();
+    void fill_wall();
+    void add_apple(bool lock);
+
 public:
     void step(int64_t a) override;
     void step();
-    void initialize_snake();
-    void fill_wall();
-    void add_apple(bool lock);
-    void add_apple_unsafe();
 
     [[nodiscard]] bool is_valid(const coord_t& coord) const;
     [[nodiscard]] bool is_open(const coord_t& coord) const;
@@ -87,7 +88,6 @@ public:
     [[nodiscard]] torch::Tensor get_action_space() const override;
     [[nodiscard]] torch::Tensor get_observation_space() const override;
 
-    void reset(size_t length);
     void reset() override;
     void render(bool interactive) override;
     void close() override;

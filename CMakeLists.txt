@@ -43,7 +43,7 @@ endif()
 
 
 # Include header files
-include_directories(
+include_directories(SYSTEM
         "inc"
 )
 

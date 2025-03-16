@@ -46,11 +46,6 @@ SnakeEnv::SnakeEnv(int64_t width, int64_t height):
 
 
 void SnakeEnv::reset() {
-    reset(3);
-}
-
-
-void SnakeEnv::reset(size_t length) {
     // Exclusive lock for writing
     std::unique_lock lock(m);
 
@@ -64,7 +59,7 @@ void SnakeEnv::reset(size_t length) {
     initialize_snake();
     std::ranges::shuffle(xy_permutation, generator);
     i_permutation = 0;
-    add_apple(true);
+    add_apple(false);
 }
 
 
@@ -84,8 +79,6 @@ void SnakeEnv::initialize_snake() {
     std::uniform_int_distribution<int64_t> x_dist(1, width-2);
     std::uniform_int_distribution<int64_t> y_dist(1, height-2);
 
-    // Exclusive lock for writing
-    std::unique_lock lock(m);
     snake = {};
 
     snake.emplace_front(x_dist(generator), y_dist(generator));

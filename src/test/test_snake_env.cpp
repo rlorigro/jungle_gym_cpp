@@ -41,7 +41,6 @@ void test(bool interactive){
 
     mt19937 generator(1337);
     std::uniform_int_distribution<int64_t> dist(0, action_space.sizes()[0] - 1); // Create uniform distribution
-    std::uniform_int_distribution<int64_t> length_dist(3,10);
 
     for (size_t i=0; i<100; i++) {
         if (interactive) {
@@ -53,7 +52,7 @@ void test(bool interactive){
         }
 
         if (e.is_terminated() or e.is_truncated()) {
-            e.reset(length_dist(generator));
+            e.reset();
         }
 
         sleep_for(std::chrono::duration<double, std::milli>(500));

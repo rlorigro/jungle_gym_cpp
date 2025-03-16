@@ -28,22 +28,20 @@ class A3CAgent {
     RMSPropAsync optimizer_critic;
 
     Hyperparameters params;
-    size_t n_threads;
 
 public:
-    inline A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic, size_t n_threads);
+    inline A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic);
     inline void train(shared_ptr<const Environment> env);
     inline void test(shared_ptr<const Environment> env);
 };
 
 
-A3CAgent::A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic, size_t n_threads):
+A3CAgent::A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic):
         actor(actor),
         critic(critic),
         optimizer_actor(actor->parameters(), params.learn_rate),
         optimizer_critic(critic->parameters(), params.learn_rate),
-        params(params),
-        n_threads(n_threads)
+        params(params)
 {
     if (!actor) {
         throw runtime_error("ERROR: actor pointer is null");
@@ -62,22 +60,28 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     // Make a copy of the environment
     shared_ptr<Environment> environment = env->clone();
     environment->reset();
+    atomic<size_t> episode;
 
-    auto sync_fn = [&](shared_ptr<Model> actor_worker, shared_ptr<Model> critic_worker) {
+    auto sync_fn = [&](shared_ptr<Model> actor_worker, shared_ptr<Model> critic_worker, size_t& e) {
         // The RMSPropAsync optimizer handles the locking of the parameters during global/shared param updates
         optimizer_critic.step(critic_worker->parameters());
         optimizer_actor.step(actor_worker->parameters());
 
+        critic_worker->zero_grad();
+        actor_worker->zero_grad();
+
         // Sync the worker with the shared params
         optimizer_critic.get_params(critic_worker);
         optimizer_actor.get_params(actor_worker);
+
+        e = episode.fetch_add(1);
 
         // This should be true to block the worker from stepping its own local optimizer
         return true;
     };
 
     vector<thread> threads;
-    for (size_t i=0; i<n_threads; i++) {
+    for (size_t i=0; i<params.n_threads; i++) {
         threads.emplace_back([&]() {
             auto e = environment->clone();
             A2CAgent worker(params, actor->clone(), critic->clone());

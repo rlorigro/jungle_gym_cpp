@@ -33,15 +33,14 @@ public:
     inline void train(shared_ptr<const Environment> env);
     inline void test(shared_ptr<const Environment> env);
 
-    // Additional signature for access to internal model params and optimizers, for use with the A3C algo for param sharing
     /**
-     *
+     * Additional signature for access to internal model params and optimizers, for use with the A3C algo for param sharing
      * @param env the environment to train on
      * @param f method for A3C parameter syncing. Return true to skip subsequent worker optimize::step(), if desired
      */
     inline void train(
         shared_ptr<const Environment> env,
-        const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic)>& f
+        const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f
         );
 };
 
@@ -67,15 +66,13 @@ A2CAgent::A2CAgent(const Hyperparameters& params, shared_ptr<Model> actor, share
 void A2CAgent::train(shared_ptr<const Environment> env) {
     // By default, don't need to do anything with the internals for vanilla A2C. Instead provide null function.
     // Returning false results in default worker-specific optimizer::step().
-    auto f_null = [&](
-        shared_ptr<Model> actor,
-        shared_ptr<Model> critic){return false;};
+    auto f_null = [&](shared_ptr<Model> a,shared_ptr<Model> b, size_t c){return false;};
 
     train(env, f_null);
 }
 
 
-void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic)>& f){
+void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
@@ -138,8 +135,6 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             }
         }
 
-        e++;
-
         auto td_loss = episode.compute_td_loss(params.gamma, false, true, environment->is_terminated());
         auto entropy_loss = episode.compute_entropy_loss(false, false);
 
@@ -161,22 +156,26 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
 
         // False by default, true if using A3C parameter sync fn. If using A3C the grads are sent to the master params
         // instead and this worker's model is updated by fetching the master params, so no local step() is needed.
-        bool skip_step = f(actor, critic);
+        // In A3C, the episode count (or step count) is maintained at the global level, so our e counter is set by
+        // the main thread.
+        bool is_worker = f(actor, critic, e);
+
+        if (is_worker) {
+            continue;
+        }
+
+        e++;
 
         // Periodically apply the accumulated gradient to the model
         // if (e % std::max(params.batch_size/2,size_t(1)) == 0){
         if (e % params.batch_size == 0){
-            if (not skip_step){
-                optimizer_critic.step();
-            }
+            optimizer_critic.step();
             optimizer_critic.zero_grad();
         }
 
         // Periodically apply the accumulated gradient to the model
         if (e % params.batch_size == 0){
-            if (not skip_step){
-                optimizer_actor.step();
-            }
+            optimizer_actor.step();
             optimizer_actor.zero_grad();
         }
     }

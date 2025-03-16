@@ -16,6 +16,8 @@ public:
 
     // Weight of entropy term in the loss function
     float lambda = 0.01;
+
+    size_t n_threads;
 };
 
 

@@ -67,7 +67,7 @@ void train_and_test(Hyperparameters& hyperparams, string type){
         shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,4);
         shared_ptr<SimpleConv> critic = make_shared<SimpleConv>(w,w,4,1);
 
-        A3CAgent agent(hyperparams, actor, critic, 1);
+        A3CAgent agent(hyperparams, actor, critic);
         agent.train(env);
         agent.test(env);
     }
@@ -98,6 +98,11 @@ int main(int argc, char* argv[]){
             "--n_episodes",
             params.n_episodes,
             "n_episodes");
+
+    app.add_option(
+            "--n_threads",
+            params.n_threads,
+            "Number of threads to use. Only applies to asynchronous algos such as A3C");
 
     app.add_option(
             "--batch_size",

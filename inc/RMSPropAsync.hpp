@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <stdexcept>
 #include <memory>
@@ -94,13 +96,10 @@ void RMSPropAsync::get_params(shared_ptr<torch::nn::Module> model){
     // Wait for write operation to complete before reading, but allow concurrent read operations
     // TODO: analyze, check for reader starvation?
     shared_lock lock(m);
+    torch::NoGradGuard no_grad_guard;
 
     for (size_t i = 0; i < params.size(); i++) {
-        model->parameters()[i].detach_().copy_(params[i]).set_requires_grad(true);
-    }
-
-    for (size_t i = 0; i < params.size(); i++) {
-        cerr << model->parameters()[i].equal(params.at(i)) << '\n';
+        model->parameters()[i].copy_(params[i]);
     }
 }
 

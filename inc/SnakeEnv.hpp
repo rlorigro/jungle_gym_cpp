@@ -32,12 +32,12 @@ class SnakeEnv: public Environment{
 
     vector<coord_t> xy_permutation;
 
-    mt19937 generator;
+    mutable mt19937 generator;
     shared_mutex m;
 
     // The snake will always move forward unless instructed to turn. cached_action is used to cache upcoming action
     // or simply keep track of the prev instruction so the snake continues to move
-    atomic<int64_t> cached_action = 0;
+    atomic<int64_t> cached_action = STRAIGHT;
 
     deque <coord_t> snake;
     coord_t apple;
@@ -52,10 +52,11 @@ class SnakeEnv: public Environment{
 
     int64_t i_permutation = 0;
 
-    static const int64_t UP = 0;
-    static const int64_t RIGHT = 1;
-    static const int64_t DOWN = 2;
-    static const int64_t LEFT = 3;
+    static constexpr float pi = 3.14159265359;
+
+    static const int64_t LEFT = 0;
+    static const int64_t STRAIGHT = 1;
+    static const int64_t RIGHT = 2;
 
     static const int64_t SNAKE_BODY = 0;
     static const int64_t SNAKE_HEAD = 1;
@@ -63,8 +64,8 @@ class SnakeEnv: public Environment{
     static const int64_t WALL = 3;
 
     static constexpr float REWARD_COLLISION = -1;
-    static constexpr float REWARD_APPLE = 3;
-    static constexpr float REWARD_MOVE = -0.05;
+    static constexpr float REWARD_APPLE = 5;
+    static constexpr float REWARD_MOVE = -0.02;
 
     void initialize_snake();
     void add_apple_unsafe();
@@ -78,11 +79,8 @@ public:
     [[nodiscard]] bool is_valid(const coord_t& coord) const;
     [[nodiscard]] bool is_open(const coord_t& coord) const;
     void update_coord(int64_t a, coord_t& coord) const;
-    void get_complement(at::Tensor& action) const;
-    [[nodiscard]] int64_t get_complement(int64_t a) const;
     void get_head(coord_t& coord) const;
     void get_neck(coord_t& coord) const;
-    [[nodiscard]] int64_t get_prev_action() const;
 
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
     [[nodiscard]] torch::Tensor get_action_space() const override;

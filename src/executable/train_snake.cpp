@@ -33,9 +33,6 @@ using std::string;
 
 using namespace JungleGym;
 
-#include <iostream>
-#include <stdexcept>
-
 using std::runtime_error;
 using std::cerr;
 using std::min;
@@ -47,7 +44,10 @@ void train_and_test(Hyperparameters& hyperparams, string type){
 
     if (type == "pg") {
         shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
-        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,4);
+
+        int64_t out_size = env->get_action_space().numel();
+        cerr << "action space: " << out_size << '\n';
+        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,out_size);
 
         PGAgent agent(hyperparams, actor);
         agent.train(env);
@@ -55,7 +55,10 @@ void train_and_test(Hyperparameters& hyperparams, string type){
     }
     else if (type == "a2c") {
         shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
-        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,4);
+
+        int64_t out_size = env->get_action_space().numel();
+        cerr << "action space: " << out_size << '\n';
+        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,out_size);
         shared_ptr<SimpleConv> critic = make_shared<SimpleConv>(w,w,4,1);
 
         A2CAgent agent(hyperparams, actor, critic);
@@ -64,7 +67,10 @@ void train_and_test(Hyperparameters& hyperparams, string type){
     }
     else if (type == "a3c") {
         shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
-        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,4);
+
+        int64_t out_size = env->get_action_space().numel();
+        cerr << "action space: " << out_size << '\n';
+        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,out_size);
         shared_ptr<SimpleConv> critic = make_shared<SimpleConv>(w,w,4,1);
 
         A3CAgent agent(hyperparams, actor, critic);

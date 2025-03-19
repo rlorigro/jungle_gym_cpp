@@ -136,10 +136,10 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
         }
 
         auto td_loss = episode.compute_td_loss(params.gamma, false, true, environment->is_terminated());
-        auto entropy_loss = episode.compute_entropy_loss(false, false);
+        auto entropy_loss = episode.compute_entropy_loss(false, true);
 
         auto actor_loss = td_loss - params.lambda*entropy_loss;
-        auto critic_loss = episode.compute_critic_loss(params.gamma, false, environment->is_terminated());
+        auto critic_loss = 0.5*episode.compute_critic_loss(params.gamma, false, environment->is_terminated());
 
         // Print some stats, increment loss using episode, update model if batch_size accumulated
         cerr << std::left

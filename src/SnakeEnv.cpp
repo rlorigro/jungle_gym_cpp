@@ -6,12 +6,17 @@
 #include <stdexcept>
 #include <random>
 #include <vector>
+#include <cmath>
 
 using std::runtime_error;
-using std::cerr;
 using std::random_device;
-using std::vector;
 using std::to_string;
+using std::vector;
+using std::atan2;
+using std::cos;
+using std::sin;
+using std::cerr;
+
 using torch::slice;
 using namespace torch::indexing;
 
@@ -20,7 +25,7 @@ namespace JungleGym{
 SnakeEnv::SnakeEnv(int64_t width, int64_t height):
     observation_space(torch::zeros({width, height, 4}, torch::kFloat32)),
     observation_space_3d(observation_space.accessor<float,3>()),
-    action_space(torch::zeros({4}, torch::kFloat32)),
+    action_space(torch::zeros({3}, torch::kFloat32)),
     generator(random_device()()),
     width(width),
     height(height),
@@ -55,7 +60,7 @@ void SnakeEnv::reset() {
     terminated = false;
     truncated = false;
     reward = 0;
-    cached_action.store(0);
+    cached_action.store(STRAIGHT);
     initialize_snake();
     std::ranges::shuffle(xy_permutation, generator);
     i_permutation = 0;
@@ -85,40 +90,41 @@ void SnakeEnv::initialize_snake() {
 
     observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
 
-    vector<int64_t> moves = {0,1,2,3};
+    vector<int64_t> moves = {0,1,2};
 
     while (snake.size() < length_dist(generator)) {
-        snake.push_front(snake.front());
+        coord_t next = snake.front();
 
         std::shuffle(moves.begin(), moves.end(), generator);
 
         for (size_t i=0; i<=moves.size(); i++) {
-            if (i == 4) {
-                // Rewind if failed to add anything to this snake (only possible if >4 length)
+            if (i == moves.size() and snake.size() > 1) {
+                // Rewind if failed to add anything to this snake
                 observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 0;
-                snake.pop_front();
                 snake.pop_front();
                 continue;
             }
 
             auto a = moves[i];
 
-            update_coord(a, snake.front());
+            update_coord(a, next);
 
-            if (is_open(snake.front())) {
-                // Keep track of prev action even when initializing so it can be known at start
-                observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
-                cached_action = a;
+            if (is_open(next)) {
+                observation_space_3d[next.first][next.second][SNAKE_BODY] = 1;
+                snake.emplace_front(next);
                 break;
             }
             else {
                 // Reset to prev position
-                snake.front() = *(++snake.begin());
+                next = snake.front();
             }
         }
     }
 
     observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
+
+    // Default to always going straight next time unless specified otherwise
+    cached_action = STRAIGHT;
 
     // unique lock expires
 }
@@ -126,11 +132,6 @@ void SnakeEnv::initialize_snake() {
 
 torch::Tensor SnakeEnv::get_action_space() const {
     return action_space;
-}
-
-
-int64_t SnakeEnv::get_prev_action() const {
-    return cached_action;
 }
 
 
@@ -159,6 +160,11 @@ torch::Tensor SnakeEnv::get_observation_space() const {
         i++;
     }
 
+    // Mean = 0, Stddev = 1, Shape = etc
+    torch::Tensor noise = torch::normal(0.0, 0.01, o.sizes());
+    o += noise;
+    o.clip_(0.0, 1.0);
+
     return o;
 }
 
@@ -172,62 +178,45 @@ bool SnakeEnv::is_open(const coord_t& coord) const {
 
 
 void SnakeEnv::update_coord(int64_t a, coord_t& coord) const{
+    float theta;
+
+    if (snake.size() >= 2) {
+        coord_t head;
+        coord_t neck;
+
+        get_head(head);
+        get_neck(neck);
+
+        float x_delta = float(head.first - neck.first);
+        float y_delta = float(head.second - neck.second);
+
+        if (x_delta + y_delta >= 1.01) {
+            throw runtime_error("ERROR: illegal move in snake environment: " + to_string(head.first) + "," + to_string(head.second) + "-->" + to_string(neck.first) + "," + to_string(neck.second));
+        }
+
+        theta = atan2(y_delta,x_delta);
+    }
+    else {
+        // std::uniform_int_distribution<int64_t> theta_dist(0,4);
+        // theta = pi*float(theta_dist(generator))/2;
+        theta = 0;
+    }
+
     switch (a) {
-        case UP:
-            coord.second += 1;   // UP
+        case LEFT:
+            theta += pi/2;
+            break;
+        case STRAIGHT:
             break;
         case RIGHT:
-            coord.first += 1;    // RIGHT
-            break;
-        case DOWN:
-            coord.second -= 1;   // DOWN
-            break;
-        case LEFT:
-            coord.first -= 1;    // LEFT
+            theta -= pi/2;
             break;
         default:
             throw std::runtime_error("ERROR: Invalid action range: " + to_string(a));
     }
-}
 
-
-void SnakeEnv::get_complement(torch::Tensor& action) const{
-    auto a = action.argmax(0).item<int64_t>();
-    auto a_1d = action.accessor<int64_t,1>();
-    action *= 0;
-    
-    switch (a) {
-        case UP:
-            a_1d[DOWN] = 1;   // UP --> DOWN
-            break;
-        case RIGHT:
-            a_1d[LEFT] = 1;   // RIGHT --> LEFT
-            break;
-        case DOWN:
-            a_1d[UP] = 1;   // DOWN --> UP
-            break;
-        case LEFT:
-            a_1d[RIGHT] = 1;   // LEFT --> RIGHT
-            break;
-        default:
-            throw std::runtime_error("ERROR: Invalid range");
-    }
-}
-
-
-int64_t SnakeEnv::get_complement(int64_t a) const{
-    switch (a) {
-        case UP:
-            return DOWN;   // UP --> DOWN
-        case RIGHT:
-            return LEFT;   // RIGHT --> LEFT
-        case DOWN:
-            return UP;   // DOWN --> UP
-        case LEFT:
-            return RIGHT;   // LEFT --> RIGHT
-        default:
-            throw std::runtime_error("ERROR: Invalid range");
-    }
+    coord.first += round(cos(theta));
+    coord.second += round(sin(theta));
 }
 
 
@@ -276,24 +265,23 @@ void SnakeEnv::step(int64_t a) {
     std::unique_lock lock(m);  // Exclusive lock for writing
 
     reward = 0;
+    cached_action = STRAIGHT;
 
     if (terminated or truncated){
         return;
     }
 
-    cached_action = a;
+    coord_t next = snake.front();
 
-    // Even if the move is invalid we add it to the snake, and then test afterward
-    snake.push_front(snake.front());
+    update_coord(a, next);
 
-    update_coord(a, snake.front());
-
-    if (not is_open(snake.front())) {
-        snake.pop_front();
+    if (not is_open(next)) {
         terminated = true;
         reward = REWARD_COLLISION;
         return;
     }
+
+    snake.emplace_front(next);
 
     // Update the grid (add head square)
     observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
@@ -332,8 +320,13 @@ void SnakeEnv::get_head(coord_t& coord) const {
 
 
 void SnakeEnv::get_neck(coord_t& coord) const {
+    if (snake.size() < 2) {
+        throw std::runtime_error("ERROR: cannot get neck of snake with length: " + to_string(snake.size()));
+    }
+
     coord = *(++snake.begin());
 }
+
 
 void SnakeEnv::render(bool interactive) {
     int32_t SCREEN_WIDTH = 600;
@@ -390,20 +383,15 @@ void SnakeEnv::render(bool interactive) {
                 if (e.key.keysym.sym == SDLK_ESCAPE) {
                     quit = true;
                 }
-                else if (e.key.keysym.sym == SDLK_UP) {
-                    cerr << "<-" << '\n';
-                    cached_action = UP;
+                if (e.key.keysym.sym == SDLK_TAB) {
+                    truncated = true;
                 }
                 else if (e.key.keysym.sym == SDLK_RIGHT) {
-                    cerr << "/\\" << '\n';
+                    cerr << "-->" << '\n';
                     cached_action = RIGHT;
                 }
-                else if (e.key.keysym.sym == SDLK_DOWN) {
-                    cerr << "->" << '\n';
-                    cached_action = DOWN;
-                }
                 else if (e.key.keysym.sym == SDLK_LEFT) {
-                    cerr << "\\/" << '\n';
+                    cerr << "<--" << '\n';
                     cached_action = LEFT;
                 }
             }

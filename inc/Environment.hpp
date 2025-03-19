@@ -11,6 +11,7 @@ using std::shared_ptr;
 using std::make_shared;
 using std::shared_mutex;
 using std::mt19937;
+using std::atomic;
 
 
 namespace JungleGym{
@@ -21,8 +22,8 @@ protected:
     torch::Tensor action_space;
     torch::Tensor observation_space;
     float reward;
-    bool terminated;
-    bool truncated;
+    atomic<bool> terminated;
+    atomic<bool> truncated;
     Environment();
 
 public:

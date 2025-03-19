@@ -4,6 +4,7 @@
 #include "Hyperparameters.hpp"
 #include "RMSPropAsync.hpp"
 #include "Environment.hpp"
+#include "A2CAgent.hpp"
 #include "Episode.hpp"
 #include "Policy.hpp"
 #include <memory>
@@ -76,16 +77,14 @@ void A3CAgent::train(shared_ptr<const Environment> env){
 
         e = episode.fetch_add(1);
 
-        // This should be true to block the worker from stepping its own local optimizer
+        // This should be true to block the worker from stepping its own local optimizer and episode counter
         return true;
     };
 
     vector<thread> threads;
     for (size_t i=0; i<params.n_threads; i++) {
         threads.emplace_back([&]() {
-            auto e = environment->clone();
             A2CAgent worker(params, actor->clone(), critic->clone());
-
             worker.train(environment, sync_fn);
         });
     }
@@ -102,17 +101,19 @@ void A3CAgent::test(shared_ptr<const Environment> env){
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
 
+    actor->eval();
+    critic->eval();
+
     shared_ptr<Environment> environment = env->clone();
 
     auto prev_action = environment->get_action_space();
 
-    size_t e = 0;
     std::thread t(std::bind(&Environment::render, environment, false));
 
-    while (e < params.n_episodes) {
+    while (true) {
         environment->reset();
 
-        for (size_t s=0; s<params.episode_length; s++) {
+        while (true) {
             auto input = environment->get_observation_space().clone();
             input += 0.0001;
 
@@ -136,8 +137,6 @@ void A3CAgent::test(shared_ptr<const Environment> env){
 
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
-
-        e++;
     }
 
     t.join();

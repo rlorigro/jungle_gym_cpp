@@ -122,14 +122,24 @@ $$
 ### **SimpleConv**
 
 - Densenet with layer grouping, 3 convolutions (stride 1, kernel of 3)
-- CBAM channel/spatial attention
+
+[//]: # (- CBAM channel/spatial attention)
 
 ## Results
 
 An example of a mildly successful Policy Gradient agent trained with entropy regularization. You can see that it has 
 converged on a circling behavior for self-avoidance, and it biases its circular motion toward the apple, stochastically.
 
-![Alt Text](data/output.gif)
+![Alt Text](data/pg_demo.gif)
+
+An example of a slightly more successful A3C agent trained with entropy regularization. It more directly targets the
+apples, sometimes to its own detriment. Trained with:
+
+```
+./train_snake --type a3c --gamma 0.9 --learn_rate 0.0001 --lambda 0.07 --n_episodes 60000 --n_threads 24
+```
+
+![Alt Text](data/a3c_demo.gif)
 
 WIP
 

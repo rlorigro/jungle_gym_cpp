@@ -80,7 +80,7 @@ void PGAgent::train(shared_ptr<const Environment> env){
             Tensor input = environment->get_observation_space();
             input += 0.0001;
 
-            auto log_probabilities = actor->forward(input);
+            auto log_probabilities = torch::flatten(actor->forward(input));
             auto probabilities = torch::exp(log_probabilities);
 
             int64_t choice;

@@ -47,10 +47,13 @@ class SnakeEnv: public Environment{
     int64_t width;
     int64_t height;
 
-    size_t initial_length_min = 3;
+    size_t initial_length_min = 4;
     size_t initial_length_max = 6;
 
     int64_t i_permutation = 0;
+
+    int64_t patience_limit = width*height + 1;
+    int64_t patience_counter = 0;
 
     static constexpr float pi = 3.14159265359;
 
@@ -65,7 +68,7 @@ class SnakeEnv: public Environment{
 
     static constexpr float REWARD_COLLISION = -1;
     static constexpr float REWARD_APPLE = 5;
-    static constexpr float REWARD_MOVE = -0.02;
+    static constexpr float REWARD_MOVE = -0.05;
 
     void initialize_snake();
     void add_apple_unsafe();

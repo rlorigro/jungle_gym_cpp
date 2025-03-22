@@ -15,6 +15,7 @@ using std::vector;
 using std::atan2;
 using std::cos;
 using std::sin;
+using std::min;
 using std::cerr;
 
 using torch::slice;
@@ -122,11 +123,12 @@ void SnakeEnv::initialize_snake() {
     }
 
     observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
+    observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 0;
 
     // Default to always going straight next time unless specified otherwise
     cached_action = STRAIGHT;
 
-    // unique lock expires
+    patience_counter = 0;
 }
 
 
@@ -143,8 +145,8 @@ torch::Tensor SnakeEnv::get_action_space() const {
 torch::Tensor SnakeEnv::get_observation_space() const {
     auto o = observation_space.clone();
 
-    float a = 0.8;
-    float b = 0.5;
+    float a = 1.0;
+    float b = 0.1;
     float delta = (a-b) / float(snake.size() - 2);
 
     size_t i = 0;
@@ -283,15 +285,17 @@ void SnakeEnv::step(int64_t a) {
 
     snake.emplace_front(next);
 
-    // Update the grid (add head square)
-    observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
-    observation_space_3d[snake.front().first][snake.front().second][SNAKE_BODY] = 1;
-
     coord_t neck;
     get_neck(neck);
 
+    // Update the grid (add head square)
+    observation_space_3d[snake.front().first][snake.front().second][SNAKE_HEAD] = 1;
+
     // Need to remove head indicator from prev position
     observation_space_3d[neck.first][neck.second][SNAKE_HEAD] = 0;
+
+    // The body trails the head
+    observation_space_3d[neck.first][neck.second][SNAKE_BODY] = 1;
 
     auto& tail = snake.back();
 
@@ -300,6 +304,7 @@ void SnakeEnv::step(int64_t a) {
         observation_space_3d[apple.first][apple.second][APPLE] = 0;
         add_apple(false);
         reward += REWARD_APPLE;
+        patience_counter = 0;
     }
     else {
         // Update the grid (remove tail square)
@@ -307,6 +312,11 @@ void SnakeEnv::step(int64_t a) {
         observation_space_3d[tail.first][tail.second][SNAKE_BODY] = 0;
         snake.pop_back();
         reward += REWARD_MOVE;
+        patience_counter++;
+    }
+
+    if (patience_counter == patience_limit) {
+        truncated = true;
     }
 
     // cerr << "step" << '\n';
@@ -419,7 +429,7 @@ void SnakeEnv::render(bool interactive) {
                 const auto apple = o_3d[i_x][i_y][APPLE];
                 const auto wall = o_3d[i_x][i_y][WALL];
 
-                SDL_SetRenderDrawColor(renderer, 125*body + 125*head, 255*apple, 255*wall, 255); // Red
+                SDL_SetRenderDrawColor(renderer, 200*body + 200*head, 200*apple + 200*head, 200*wall + 200*head, 200); // Red
                 SDL_RenderFillRect(renderer, &r);
             }
         }

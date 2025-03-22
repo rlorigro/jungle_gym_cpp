@@ -147,8 +147,8 @@ public:
         auto gap = torch::mean(x, {2, 3}, true); // Mean across width and height -> [B, C, 1, 1]
 
         // Max across width (dim=2) and height (dim=3) -> [B, C, 1, 1]
-        auto gmp = std::get<0>(torch::max(x, 2, true));      // Max along dim 2 (width)
-        gmp = std::get<0>(torch::max(gmp, 3, true));               // Max along dim 3 (height)
+        auto gmp = std::get<0>(torch::max(x, 2, true));  // Max over width
+        gmp = std::get<0>(torch::max(gmp, 3, true));     // Max over height
 
         // Flatten the GAP and GMP results (don't remove batch dimension)
         gap = torch::flatten(gap, 1,3);
@@ -227,10 +227,10 @@ SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, in
 
     conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, 8, k).stride(1).groups(1).padding((k-1)/2)));
     conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8, 16, k).stride(1).groups(1).padding((k-1)/2)));
-    conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8+16, 32, k).stride(1).groups(1).padding((k-1)/2)));
+    // conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8+16, 32, k).stride(1).groups(1).padding((k-1)/2)));
 
     // Construct and register two Linear submodules.
-    fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*(input_channels+8+16+32), 256));
+    fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*(input_channels+8+16), 256));
     fc2 = register_module("fc2", torch::nn::Linear(256, 128));
     fc3 = register_module("fc3", torch::nn::Linear(128, output_size));
 
@@ -259,8 +259,8 @@ Tensor SimpleConv::forward(Tensor x) {
     auto x_conv2 = torch::gelu(conv2->forward(x));
     x = torch::cat({x_input, x_conv1, x_conv2}, 1);
 
-    auto x_conv3 = torch::gelu(conv3->forward(x));
-    x = torch::cat({x_input, x_conv1, x_conv2, x_conv3}, 1);
+    // auto x_conv3 = torch::gelu(conv3->forward(x));
+    // x = torch::cat({x_input, x_conv1, x_conv2, x_conv3}, 1);
 
     // cerr << x_input.sizes() << '\n';
     // cerr << x_conv1.sizes() << '\n';
@@ -268,23 +268,37 @@ Tensor SimpleConv::forward(Tensor x) {
     // cerr << x_conv3.sizes() << '\n';
     // cerr << x.sizes() << '\n';
 
-    // Attention mapping
-    auto c = x*channel_map.forward(x);
-    auto s = c*spatial_map.forward(c);
-    x = x + s;
+    // --- Attention mapping ---
+    // auto c = x*channel_map.forward(x);
+    // auto s = c*spatial_map.forward(c);
+    // x = x + s;
 
-    // Output/prediction layers
-    x = torch::flatten(x);
+    // --- Self attention ---
+    // int batch = x.size(0);
+    // int channels = x.size(1);
+    //
+    // auto attn_scores = torch::matmul(x.view({batch, channels, -1}).transpose(1,2),x.view({batch, channels, -1}));
+    //
+    // attn_scores = torch::softmax(attn_scores, -1);
+    //
+    // auto x_flat = x.view({batch, channels, -1}).transpose(1,2);  // Shape: [batch, H*W, channels]
+    //
+    // x = torch::matmul(attn_scores, x_flat).transpose(1,2).view(x.sizes());
+
+    // --- Output/prediction layers ---
+    x = torch::flatten(x, 1,-1);
+
     x = torch::gelu(layernorm1(fc1->forward(x)));
     x = torch::gelu(layernorm2(fc2->forward(x)));
 
     // for singleton output, assume no activation needed. e.g. critic value function.
     if (output_size == 1) {
-        x = torch::gelu(fc3->forward(x));
+        x = fc3->forward(x);
     }
     else {
-        x = torch::log_softmax(fc3->forward(x), 0);
+        x = torch::log_softmax(fc3->forward(x), -1);
     }
+
     return x;
 }
 

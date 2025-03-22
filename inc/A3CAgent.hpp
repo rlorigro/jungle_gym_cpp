@@ -127,7 +127,7 @@ void A3CAgent::test(shared_ptr<const Environment> env){
             cerr << probabilities << '\n';
 
             int64_t choice = torch::argmax(probabilities).item<int64_t>();
-            // choice = torch::multinomial(probabilities, 1).item<int64_t>();
+            // int64_t choice = torch::multinomial(probabilities, 1).item<int64_t>();
 
             environment->step(choice);
 

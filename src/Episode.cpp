@@ -117,7 +117,7 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
     auto stop = int64_t(rewards.size() - terminal);
     auto start = 0;
 
-    // cerr << start << ',' << stop << ',' << rewards.size() << ',' << r_prev << '\n';
+    // cerr << start << ',' << stop << ',' << rewards.size() << ',' << r_prev << ',' << terminal << '\n';
 
     vector<float> td_rewards = rewards;
 
@@ -154,11 +154,11 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
             // If using advantage, we want to train the model to maximize the "advantage" over the expected value
             // of the next state, i.e. Q(s_t, a_t) - V(s_t), both normalizing the reward and encouraging choices
             // that are "advantageous"
-            // cerr << "L=" << loss.item<float>() << " l=" << log_action_distributions[i][actions[i]].item<float>()*(td_rewards[i] - value_predictions[i].item<float>()) << "\tlog_p=" << log_action_distributions[i][actions[i]].item<float>() << "\tR=" << td_rewards[i] << "\tr=" << rewards[i] << "\tV=" << value_predictions[i].item<float>() << '\n';
+            // cerr << "a=" << actions[i] << " L=" << loss.item<float>() << " l=" << log_action_distributions[i][actions[i]].item<float>()*(td_rewards[i] - value_predictions[i].item<float>()) << "\tlog_p=" << log_action_distributions[i][actions[i]].item<float>() << "\tR=" << td_rewards[i] << "\tr=" << rewards[i] << "\tV=" << value_predictions[i].item<float>() << '\n';
             loss = loss - log_action_distributions[i][actions[i]]*(td_rewards[i] - value_predictions[i].item<float>());
         }
         else{
-            // cerr << "L=" << loss.item<float>() << " l=" << log_action_distributions[i][actions[i]].item<float>()*td_rewards[i] << "\tlog_p=" << log_action_distributions[i][actions[i]].item<float>()  << "\tp=" << exp(log_action_distributions[i][actions[i]].item<float>()) << "\tR=" << td_rewards[i] << "\tr=" << rewards[i] << '\n';
+            // cerr << "a=" << actions[i] << " L=" << loss.item<float>() << " l=" << log_action_distributions[i][actions[i]].item<float>()*td_rewards[i] << "\tlog_p=" << log_action_distributions[i][actions[i]].item<float>()  << "\tp=" << exp(log_action_distributions[i][actions[i]].item<float>()) << "\tR=" << td_rewards[i] << "\tr=" << rewards[i] << '\n';
             loss = loss - log_action_distributions[i][actions[i]]*td_rewards[i];
         }
     }

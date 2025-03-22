@@ -102,10 +102,10 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             input += 0.0001;
 
             // Get value prediction (singleton tensor)
-            auto value_predict = critic->forward(input);
+            auto value_predict = torch::flatten(critic->forward(input));
 
             // Get action distribution of the policy (shape of action space)
-            auto log_probabilities = actor->forward(input);
+            auto log_probabilities = torch::flatten(actor->forward(input));
             auto probabilities = torch::exp(log_probabilities);
 
             int64_t choice;
@@ -125,12 +125,8 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
 
             episode.update(log_probabilities, value_predict, choice, reward);
 
-            if (environment->is_terminated()) {
+            if (environment->is_terminated() or environment->is_truncated()) {
                 environment->reset();
-                break;
-            }
-
-            if (environment->is_truncated()) {
                 break;
             }
         }

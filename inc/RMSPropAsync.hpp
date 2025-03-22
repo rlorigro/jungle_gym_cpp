@@ -10,6 +10,7 @@ using std::runtime_error;
 using std::shared_mutex;
 using std::unique_lock;
 using std::shared_lock;
+using std::unique_ptr;
 using std::shared_ptr;
 using std::vector;
 using std::cerr;
@@ -56,7 +57,7 @@ class RMSPropAsync{
     vector<Tensor> g;
 
     const RMSPropAsyncOptions options;
-    shared_mutex m;
+    vector<unique_ptr<shared_mutex>> m;
 
 public:
     inline RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options);
@@ -73,6 +74,7 @@ RMSPropAsync::RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options):
     // Initialize g moving average
     for (const auto& p : this->params) {
         g.emplace_back(torch::full(p.sizes(), options.g_init, torch::kFloat));
+        m.emplace_back(std::make_unique<std::shared_mutex>());
     }
 }
 
@@ -84,6 +86,7 @@ RMSPropAsync::RMSPropAsync(vector<Tensor> params, float lr):
     // Initialize g moving average
     for (const auto& p : this->params) {
         g.emplace_back(torch::full(p.sizes(), options.g_init, torch::kFloat));
+        m.emplace_back(std::make_unique<std::shared_mutex>());
     }
 }
 
@@ -95,10 +98,11 @@ void RMSPropAsync::get_params(shared_ptr<torch::nn::Module> model){
 
     // Wait for write operation to complete before reading, but allow concurrent read operations
     // TODO: analyze, check for reader starvation?
-    shared_lock lock(m);
     torch::NoGradGuard no_grad_guard;
 
     for (size_t i = 0; i < params.size(); i++) {
+        shared_lock lock(*m[i]);
+
         model->parameters()[i].copy_(params[i]);
     }
 }
@@ -112,13 +116,13 @@ void RMSPropAsync::step(const std::vector<Tensor>& worker_params){
     torch::NoGradGuard no_grad_guard;
 
     // Block all threads from accessing the parameters during writing
-    unique_lock lock(m);
-
     float lr = options.lr;
     float e = options.eps;
     float a = options.alpha;
 
     for (size_t i=0; i<worker_params.size(); i++){
+        unique_lock lock(*m[i]);
+
         auto& g_wi = worker_params[i].grad();
 
         auto& g_avg = g[i];

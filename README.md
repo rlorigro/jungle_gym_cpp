@@ -86,7 +86,7 @@ Entropy is maximized when the action distribution emitted by the policy $\pi_\th
 when any value tends toward 1. Entropy regularization therefore rewards exploration, in perhaps a more nuanced way than 
 epsilon greedy sampling.
 
-### 3. Actor-critic Policy Gradient with entropy regularization
+### 3. Actor-critic Policy Gradient with entropy regularization (A2C or AAC)
 
 $$
 L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] + \lambda H(\pi_\theta(a_t | s_t)) \right)
@@ -96,12 +96,16 @@ $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \gamma V(s_{t+1}) \right) \right)^2
 $$
 
+### 3. A3C
+
 This implementation of A3C makes use of a specialized, thread safe, parameter optimizer, RMSPropAsync, which 
 combines gradients from worker threads to update a shared parameter set. The shared parameter set is then distributed 
 back to the workers. It is not lock-free as the original A3C paper claims to be, but it offers a reasonably low 
 contention alternative for which each module in the neural network has a separate mutex associated with it. The A3CAgent
 class initializes a pool of single threaded A2CAgents which have a synchronization lambda function, for simplicity and
 modularity.
+
+<img src="data/a3c_diagram.drawio.svg" alt="Description" style="display: block; margin: auto;">
 
 ## Models
 
@@ -132,7 +136,7 @@ modularity.
 ## Results
 
 An example of a mildly successful Policy Gradient agent trained with entropy regularization. You can see that it has 
-converged on a circling behavior for self-avoidance, and it biases its circular motion toward the apple, stochastically.
+converged on a circling behavior for self-avoidance, and it randomly biases its circular motion toward the apple.
 
 ![Alt Text](data/pg_demo.gif)
 
@@ -147,13 +151,11 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 ![Alt Text](data/a3c_demo.gif)
 
-WIP
 
 ## To do
 - Print critic's value estimation for every state during test demo
 - plot attention map 
 - ~~implement a3c (now currently a2c)~~
-- Break out epsilon annealing into simple class (deprioritized by entropy loss)
 - ~~Critic network and baseline subtraction~~
 - Visualization:
   - basic training loss plot (split into reward and entropy terms)
@@ -168,6 +170,7 @@ WIP
   - likely important for SnakeEnv, which is essentially [Cliff World](https://distill.pub/2019/paths-perspective-on-value-learning/)
 - ~~Abstract away specific NN classes~~
 - Exhaustive comparison of methods
+- Break out epsilon annealing into simple class (now deprioritized by entropy loss)
 
 
 

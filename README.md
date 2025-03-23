@@ -194,6 +194,8 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 [^4]: Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). *CBAM: Convolutional Block Attention Module*. Preprint at [https://doi.org/10.48550/arXiv.1807.06521](https://doi.org/10.48550/arXiv.1807.06521).
 
 ## To do
+- Benchmark speed vs n_threads for A3C
+- Add model checkpoints/saving/loading
 - Print critic's value estimation for every state during test demo
 - plot attention map
 - ~~implement a3c (now currently a2c)~~

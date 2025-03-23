@@ -29,7 +29,7 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 
 ## Policies
 
-### 1. Vanilla Policy Gradient
+### 1. Vanilla Policy Gradient [^1]
 
 #### Action sampling
 $$
@@ -50,7 +50,7 @@ L_\tau = -\sum_{t=0}^{T-1} \log p(a_t^*) \cdot R_t
 $$
 
 where $a_t^*$ is the action corresponding to the maximum probability in $\pi_\theta(a | s_t)$, or the action sampled
-randomly in the case of epsilon greedy policies. [^1]
+randomly in the case of epsilon greedy policies.
 
 #### Epsilon annealing
 
@@ -63,7 +63,7 @@ $$
 
 The decay terminates when $\epsilon \approx 0.01$ by computing $c = \log_{0.99}(0.01) = 458.211$, for example
 
-### 2. Policy Gradient with entropy regularization
+### 2. Policy Gradient with entropy regularization [^5]
 
 Because the training converges early, entropy regularization might be able to help prevent a feedback loop between 
 action sampling (generating the training data) and bias in the policy.
@@ -98,15 +98,13 @@ $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \gamma V(s_{t+1}) \right) \right)^2
 $$
 
-### 4. A3C
+### 4. A3C [^3]
 
 This implementation of A3C makes use of a specialized, thread safe, parameter optimizer, RMSPropAsync, which 
 combines gradients from worker threads to update a shared parameter set. The shared parameter set is then distributed 
 back to the workers. It is not lock-free as the original A3C paper claims to be, but it offers a reasonably low 
 contention alternative for which each module in the neural network has a separate mutex associated with it. The A3CAgent
 class initializes a thread pool of A2CAgents which have a synchronization lambda function, for simplicity and modularity.
-
-[^3]
 
 <p align="center">
   <img src="data/a3c_diagram.drawio.svg" alt="Description">
@@ -194,6 +192,8 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 [^3]: Mnih, V., Badia, A. P., Mirza, M., Graves, A., Lillicrap, T., Harley, T., Silver, D., & Kavukcuoglu, K. (2016). *Asynchronous Methods for Deep Reinforcement Learning*. Preprint at [https://doi.org/10.48550/arXiv.1602.01783](https://doi.org/10.48550/arXiv.1602.01783).
 
 [^4]: Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). *CBAM: Convolutional Block Attention Module*. Preprint at [https://doi.org/10.48550/arXiv.1807.06521](https://doi.org/10.48550/arXiv.1807.06521).
+
+[^5]: Williams, R. J. & Peng, J. Function Optimization using Connectionist Reinforcement Learning Algorithms. Connection Science 3, 241–268 (1991).
 
 ## To do
 - Benchmark speed vs n_threads for A3C

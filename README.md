@@ -1,5 +1,5 @@
-# jungle_gym_cpp
-For practicing libtorch and RL/ML in C++
+# jungle_gym
+A C++ implementation of reinforcement learning algorithms using libtorch.
 
 ## Environments
 
@@ -182,6 +182,8 @@ augmentation techniques like mirroring the observation and action space. Trained
 Default episode length is 16 steps. Environments of non-truncated/terminated episodes are carried over into next episode.
 
 ![Alt Text](data/a3c_demo.gif)
+
+*Apologies for the low GIF quality, this test run includes added noise*
 
 ## References
 

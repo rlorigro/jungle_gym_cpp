@@ -96,7 +96,7 @@ $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \gamma V(s_{t+1}) \right) \right)^2
 $$
 
-### 3. A3C
+### 4. A3C
 
 This implementation of A3C makes use of a specialized, thread safe, parameter optimizer, RMSPropAsync, which 
 combines gradients from worker threads to update a shared parameter set. The shared parameter set is then distributed 

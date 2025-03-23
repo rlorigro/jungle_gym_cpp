@@ -144,9 +144,9 @@ An example of a mildly successful Policy Gradient agent trained with entropy reg
 converged on a circling behavior for self-avoidance, and it randomly biases its circular motion toward the apple. This
 agent was trained with the deprecated 4-directional absolute action space as opposed to the 3-directional relative one.
 
-### A3CAgent
-
 ![Alt Text](data/pg_demo.gif)
+
+### A3CAgent
 
 An example of a slightly more successful A3C agent trained with entropy regularization. It more directly targets the
 apples, sometimes to its own detriment. It has a strong left turn bias, which could potentially be fixed with some 

@@ -1,9 +1,11 @@
 # jungle_gym_cpp
 For practicing libtorch and RL/ML in C++
 
-## SnakeEnv
+## Environments
 
-### Environment
+### SnakeEnv
+
+Emulates the snake game with a NN-friendly observation space.
 
 #### Observation space:
 Fully observable with each position containing $c$ channels, i.e. a tensor
@@ -25,7 +27,7 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 - STRAIGHT = 1
 - RIGHT = 2
 
-## Notes
+## Policies
 
 ### 1. Vanilla Policy Gradient
 
@@ -143,7 +145,8 @@ converged on a circling behavior for self-avoidance, and it randomly biases its 
 ![Alt Text](data/pg_demo.gif)
 
 An example of a slightly more successful A3C agent trained with entropy regularization. It more directly targets the
-apples, sometimes to its own detriment. Trained with:
+apples, sometimes to its own detriment. It has a strong left turn bias, which could potentially be fixed with some 
+augmentation techniques like mirroring the observation and action space. Trained with:
 
 ```
 ./train_snake --type a3c --gamma 0.9 --learn_rate 0.0001 --lambda 0.07 --n_episodes 60000 --n_threads 24

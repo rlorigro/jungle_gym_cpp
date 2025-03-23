@@ -31,6 +31,9 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 
 ### 1. Vanilla Policy Gradient [^1]
 
+This method is the basis for a large family of modern RL algorithms which operate by directly maximizing the expected 
+reward or value of the steps taken by a policy.
+
 #### Action sampling
 $$
 a_t =
@@ -94,6 +97,11 @@ epsilon greedy sampling.
 
 ### 3. Actor-critic Policy Gradient with entropy regularization (A2C or AAC)
 
+This method employs a second network which approximates the Value function for a given state. During training, the
+policy attempts to maximize the advantage, which describes the benefit of taking a given action over the expected reward
+(given by the critic). In addition to making the objective relative to a "baseline", this provides additional stability
+in the update step by rescaling the loss consistently across a wide range of possible absolute rewards.
+
 $$
 L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] + \lambda H(\pi_\theta(a_t | s_t)) \right)
 $$
@@ -101,11 +109,6 @@ $$
 $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left(R_t - \gamma V(s_{t+1})\right)^2
 $$
-
-This method employs a second network which approximates the Value function for a given state. During training, the 
-policy attempts to maximize the advantage, which describes the benefit of taking a given action over the expected reward
-(given by the critic). In addition to making the objective relative to a "baseline", this provides additional stability 
-in the update step by rescaling the loss consistently across a wide range of possible absolute rewards.
 
 ### 4. A3C [^3]
 

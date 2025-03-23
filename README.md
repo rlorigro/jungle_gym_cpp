@@ -105,7 +105,9 @@ contention alternative for which each module in the neural network has a separat
 class initializes a pool of single threaded A2CAgents which have a synchronization lambda function, for simplicity and
 modularity.
 
-<img src="data/a3c_diagram.drawio.svg" alt="Description" style="display: block; margin: auto;">
+<p align="center">
+  <img src="data/a3c_diagram.drawio.svg" alt="Description">
+</p>
 
 ## Models
 

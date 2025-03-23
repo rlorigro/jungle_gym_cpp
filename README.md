@@ -93,8 +93,7 @@ H(\mathcal{X}) = - \sum_{x \in \mathcal{X}} p(x) \log p(x)
 $$
 
 Entropy is maximized when the action distribution emitted by the policy $\pi_\theta(a_t|s_t)$ is uniform, and minimized 
-when any value tends toward 1. Entropy regularization therefore rewards exploration, in perhaps a more nuanced way than 
-epsilon greedy sampling.
+when any value tends toward 1. Entropy regularization therefore rewards exploration.
 
 ### 3. Actor-critic Policy Gradient with entropy regularization (A2C or AAC)
 

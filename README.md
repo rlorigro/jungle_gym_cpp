@@ -16,15 +16,14 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 #### Rewards:
 
 - REWARD_COLLISION = -1
-- REWARD_APPLE = 1
+- REWARD_APPLE = 5
 - REWARD_MOVE = -0.05
 
 #### Action space:
 
-- UP = 0
-- RIGHT = 1
-- DOWN = 2
-- LEFT = 3
+- LEFT = 0
+- STRAIGHT = 1
+- RIGHT = 2
 
 ## Notes
 
@@ -89,8 +88,6 @@ epsilon greedy sampling.
 
 ### 3. Actor-critic Policy Gradient with entropy regularization
 
-WIP
-
 $$
 L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] + \lambda H(\pi_\theta(a_t | s_t)) \right)
 $$
@@ -98,6 +95,13 @@ $$
 $$
 L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left( V(s_t) - \left( R_t + \gamma V(s_{t+1}) \right) \right)^2
 $$
+
+This implementation of A3C makes use of a specialized, thread safe, parameter optimizer, RMSPropAsync, which 
+combines gradients from worker threads to update a shared parameter set. The shared parameter set is then distributed 
+back to the workers. It is not lock-free as the original A3C paper claims to be, but it offers a reasonably low 
+contention alternative for which each module in the neural network has a separate mutex associated with it. The A3CAgent
+class initializes a pool of single threaded A2CAgents which have a synchronization lambda function, for simplicity and
+modularity.
 
 ## Models
 
@@ -121,7 +125,7 @@ $$
 
 ### **SimpleConv**
 
-- Densenet with layer grouping, 3 convolutions (stride 1, kernel of 3)
+- Densenet with 2 convolution layers (stride 1, kernel of 3)
 
 [//]: # (- CBAM channel/spatial attention)
 
@@ -139,6 +143,8 @@ apples, sometimes to its own detriment. Trained with:
 ./train_snake --type a3c --gamma 0.9 --learn_rate 0.0001 --lambda 0.07 --n_episodes 60000 --n_threads 24
 ```
 
+Default episode length is 16 steps. environments of fnn-truncated/terminated episodes are carried over into next episode.
+
 ![Alt Text](data/a3c_demo.gif)
 
 WIP
@@ -146,15 +152,15 @@ WIP
 ## To do
 - Print critic's value estimation for every state during test demo
 - plot attention map 
-- implement a3c (now currently a2c)
-- Break out epsilon annealing into simple class
+- ~~implement a3c (now currently a2c)~~
+- Break out epsilon annealing into simple class (deprioritized by entropy loss)
 - ~~Critic network and baseline subtraction~~
 - Visualization:
   - basic training loss plot (split into reward and entropy terms)
   - ~~trained model behavior~~ 
     - save as GIF/video (automatically)
   - action distributions per state
-- More appropriate model for encoding observation space
+- More appropriate models for encoding observation space
   - ~~CNN (priority)~~
   - RNN
   - GNN <3

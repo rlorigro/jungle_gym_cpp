@@ -143,7 +143,7 @@ apples, sometimes to its own detriment. Trained with:
 ./train_snake --type a3c --gamma 0.9 --learn_rate 0.0001 --lambda 0.07 --n_episodes 60000 --n_threads 24
 ```
 
-Default episode length is 16 steps. environments of non-truncated/terminated episodes are carried over into next episode.
+Default episode length is 16 steps. Environments of non-truncated/terminated episodes are carried over into next episode.
 
 ![Alt Text](data/a3c_demo.gif)
 

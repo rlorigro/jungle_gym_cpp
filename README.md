@@ -65,8 +65,12 @@ The decay terminates when $\epsilon \approx 0.01$ by computing $c = \log_{0.99}(
 
 ### 2. Policy Gradient with entropy regularization [^5]
 
-Because the training converges early, entropy regularization might be able to help prevent a feedback loop between 
-action sampling (generating the training data) and bias in the policy.
+Because models often converge on shallow maxima, their subsequent rollouts can become limited in exploration. Entropy 
+regularization adds a reward for random behavior which is intended to attenuate against a feedback loop between 
+action sampling (generating the training data) and bias in the policy. In practice, the entropy term is balanced against
+the reward term to avoid early collapse, but to allow high reward rollouts to dwarf the entropy reward. In this sense,
+the entropy regularizer is a convenient and adaptive method to preventing early convergence, compared to epsilon 
+scheduling, which is typically hardcoded.
 
 $$
 L_{\text{total}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot R_t + \lambda H(\pi_\theta(a_t | s_t)) \right)

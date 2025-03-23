@@ -107,7 +107,7 @@ L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R
 $$
 
 $$
-L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left(R_t - \gamma V(s_{t+1})\right)^2
+L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left(R_t - V(s_t)\right)^2
 $$
 
 ### 4. A3C [^3]

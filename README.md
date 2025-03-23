@@ -122,6 +122,26 @@ class initializes a thread pool of A2CAgents which have a synchronization lambda
   <img src="data/a3c_diagram.drawio.svg" alt="Description">
 </p>
 
+RMSPropAsync takes the same form as standard non-centered RMSProp, with some changes to make it compatible with 
+multiple workers. The gradients computed by the workers are returned to RMSPropAsync, which then updates its internal 
+state, tracking the exponential moving average (EMA) of the squared gradient.
+
+$$
+\theta \gets \theta - \eta \frac{g_w}{\sqrt{G + \epsilon}}
+$$
+
+$$
+G \gets \alpha G + (1 - \alpha) g_w^2
+$$
+
+- $\theta$ : The shared model parameter being updated.
+- $\eta$ : The learning rate.
+- $g_w$ : The gradient of the loss with respect to $\theta$ from worker $w$.
+- $G$ : The exponentially weighted moving average of squared gradients (RMSProp accumulator).
+- $\alpha$ : The decay factor for the moving average.
+- $\epsilon$ : A small constant added for numerical stability.
+
+
 ## Models
 
 ### **ShallowNet**
@@ -146,27 +166,27 @@ class initializes a thread pool of A2CAgents which have a synchronization lambda
 
 Densenet with 2 convolution layers and CBAM spatial/channel attention [^4] [^2] 
 
-| **Layer**            | **Dimensions**                                      |
-|----------------------|----------------------------------------------------|
-| **Input**           | `input_width * input_height * input_channels`      |
-| **Conv2D (conv1)**  | `8 filters, kernel=3x3, stride=1, padding=1`       |
-| **GELU**            | -                                                  |
-| **Concat**          | `input + conv1 output`                              |
-| **Conv2D (conv2)**  | `16 filters, kernel=3x3, stride=1, padding=1`      |
-| **GELU**            | -                                                  |
-| **Concat**          | `input + conv1 output + conv2 output`              |
-| **Channel Attention** | `input * channel_attention(input)`               |
-| **Spatial Attention** | `channel_attention output * spatial_attention(output)` |
-| **Residual Add**    | `input + spatial_attention output`                  |
+| **Layer**            | **Dimensions**                                           |
+|----------------------|----------------------------------------------------------|
+| **Input**           | `input_width * input_height * input_channels`            |
+| **Conv2D (conv1)**  | `8 filters, kernel=3x3, stride=1, padding=1`             |
+| **GELU**            | -                                                        |
+| **Concat**          | `input + conv1 output`                                   |
+| **Conv2D (conv2)**  | `16 filters, kernel=3x3, stride=1, padding=1`            |
+| **GELU**            | -                                                        |
+| **Concat**          | `input + conv1 output + conv2 output`                    |
+| **Channel Attention** | `input + conv1 output + conv2 output`                    |
+| **Spatial Attention** | `input + conv1 output + conv2 output`                    |
+| **Residual Add**    | `input`                                                  |
 | **Flatten**         | `input_width * input_height * (input_channels + 8 + 16)` |
-| **Fully Connected (fc1)** | `256`                                      |
-| **LayerNorm (ln1)** | `256`                                              |
-| **GELU**            | -                                                  |
-| **Fully Connected (fc2)** | `128`                                      |
-| **LayerNorm (ln2)** | `128`                                              |
-| **GELU**            | -                                                  |
-| **Fully Connected (fc3)** | `output_size`                          |
-| **Log Softmax** *(if multiple outputs)* | `output_size`            |
+| **Fully Connected (fc1)** | `256`                                                    |
+| **LayerNorm (ln1)** | `256`                                                    |
+| **GELU**            | -                                                        |
+| **Fully Connected (fc2)** | `128`                                                    |
+| **LayerNorm (ln2)** | `128`                                                    |
+| **GELU**            | -                                                        |
+| **Fully Connected (fc3)** | `output_size`                                            |
+| **Log Softmax** *(if multiple outputs)* | `output_size`                                            |
 
 
 ## Results / Demos

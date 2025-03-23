@@ -132,7 +132,26 @@ class initializes a thread pool of A2CAgents which have a synchronization lambda
 
 ### **SimpleConv**
 
-- Densenet with 2 convolution layers (stride 1, kernel of 3)
+Densenet with 2 convolution layers (stride 1, kernel of 3)
+
+| **Layer**         | **Dimensions**                                  |
+|-------------------|------------------------------------------------|
+| **Input**        | `input_width * input_height * input_channels`  |
+| **Conv2D**       | `8 filters, kernel=3x3, stride=1, padding=1`   |
+| **GELU**         | -                                              |
+| **Concat**       | `input + conv1 output`                         |
+| **Conv2D**       | `16 filters, kernel=3x3, stride=1, padding=1`  |
+| **GELU**         | -                                              |
+| **Concat**       | `input + conv1 output + conv2 output`          |
+| **Flatten**      | `input_width * input_height * (input_channels + 8 + 16)` |
+| **Fully Connected (fc1)** | `256`                         |
+| **LayerNorm (ln1)** | `256`                                      |
+| **GELU**         | -                                              |
+| **Fully Connected (fc2)** | `128`                         |
+| **LayerNorm (ln2)** | `128`                                      |
+| **GELU**         | -                                              |
+| **Fully Connected (fc3)** | `output_size`                  |
+| **Log Softmax** *(if multiple outputs)* | `output_size`    |
 
 [//]: # (- CBAM channel/spatial attention)
 

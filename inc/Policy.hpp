@@ -220,14 +220,13 @@ SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, in
     input_height(input_height),
     input_channels(input_channels),
     output_size(output_size),
-    spatial_map(input_width, input_height, input_channels+8+16+32),
-    channel_map(input_channels+8+16+32, 2)
+    spatial_map(input_width, input_height, input_channels+8+16),
+    channel_map(input_channels+8+16, 2)
 {
     int k = 3;
 
     conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, 8, k).stride(1).groups(1).padding((k-1)/2)));
     conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8, 16, k).stride(1).groups(1).padding((k-1)/2)));
-    // conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels+8+16, 32, k).stride(1).groups(1).padding((k-1)/2)));
 
     // Construct and register two Linear submodules.
     fc1 = register_module("fc1", torch::nn::Linear(input_width*input_height*(input_channels+8+16), 256));
@@ -269,9 +268,11 @@ Tensor SimpleConv::forward(Tensor x) {
     // cerr << x.sizes() << '\n';
 
     // --- Attention mapping ---
-    // auto c = x*channel_map.forward(x);
-    // auto s = c*spatial_map.forward(c);
-    // x = x + s;
+    auto c = x*channel_map.forward(x);
+    auto s = c*spatial_map.forward(c);
+
+    // Apply residually to avoid excessive clipping/filtering of features
+    x = x + s;
 
     // --- Self attention ---
     // int batch = x.size(0);

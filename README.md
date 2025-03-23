@@ -104,8 +104,7 @@ This implementation of A3C makes use of a specialized, thread safe, parameter op
 combines gradients from worker threads to update a shared parameter set. The shared parameter set is then distributed 
 back to the workers. It is not lock-free as the original A3C paper claims to be, but it offers a reasonably low 
 contention alternative for which each module in the neural network has a separate mutex associated with it. The A3CAgent
-class initializes a pool of single threaded A2CAgents which have a synchronization lambda function, for simplicity and
-modularity.
+class initializes a thread pool of A2CAgents which have a synchronization lambda function, for simplicity and modularity.
 
 <p align="center">
   <img src="data/a3c_diagram.drawio.svg" alt="Description">

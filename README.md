@@ -32,7 +32,7 @@ of shape `[x,y,c]` where `x` and `y` correspond to width/height and $c$ is a cha
 ### 1. Vanilla Policy Gradient [^1]
 
 This method is the basis for a large family of modern RL algorithms which operate by directly maximizing the expected 
-reward or value of the steps taken by a policy.
+reward or value of the actions taken by a policy.
 
 #### Action sampling
 $$

@@ -166,17 +166,18 @@ Densenet with 2 convolution layers and CBAM spatial/channel attention [^4] [^2]
 
 ### Early implementation of Policy Gradient
 
-An example of a mildly successful Policy Gradient agent trained with entropy regularization. You can see that it has 
-converged on a circling behavior for self-avoidance, and it randomly biases its circular motion toward the apple. This
-agent was trained with the deprecated 4-directional absolute action space as opposed to the 3-directional relative one.
+An example of a mildly successful Policy Gradient SimpleConv agent trained with entropy regularization. You can see that 
+it has converged on a circling behavior for self-avoidance, and it randomly biases its circular motion toward the apple.
+This agent was trained with the deprecated 4-directional absolute action space as opposed to the 3-directional relative 
+one.
 
 ![Alt Text](data/pg_demo.gif)
 
 ### A3CAgent
 
-An example of a slightly more successful A3C agent trained with entropy regularization. It more directly targets the
-apples, sometimes to its own detriment. It has a strong left turn bias, which could potentially be fixed with some 
-augmentation techniques like mirroring the observation and action space. Trained with:
+An example of a slightly more successful A3C SimpleConv agent trained with entropy regularization. It more directly 
+targets the apples, sometimes to its own detriment. It has a strong left turn bias, which could potentially be fixed 
+with some augmentation techniques like mirroring the observation and action space. Trained with:
 
 ```
 ./train_snake --type a3c --gamma 0.9 --learn_rate 0.0001 --lambda 0.07 --n_episodes 60000 --n_threads 24

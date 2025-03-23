@@ -137,10 +137,15 @@ modularity.
 
 [//]: # (- CBAM channel/spatial attention)
 
-## Results
+## Results / Demos
+
+### Early implementation of Policy Gradient
 
 An example of a mildly successful Policy Gradient agent trained with entropy regularization. You can see that it has 
-converged on a circling behavior for self-avoidance, and it randomly biases its circular motion toward the apple.
+converged on a circling behavior for self-avoidance, and it randomly biases its circular motion toward the apple. This
+agent was trained with the deprecated 4-directional absolute action space as opposed to the 3-directional relative one.
+
+### A3CAgent
 
 ![Alt Text](data/pg_demo.gif)
 

@@ -119,5 +119,5 @@ bottlenecks, since the plateau is reached at around the same time:
 
 
 This plot summarizes the findings:
-![benchmark_a3c_plot.png](../data/benchmark_a3c_plot.png)
 
+![benchmark_a3c_plot.png](../data/benchmark_a3c_plot.png)

@@ -44,7 +44,7 @@ The benchmarking executable loops over n_threads. Steps per episode is 16 (not s
     }
 ```
 
-The results show that there is a negligible benefit beyond 8 threads when using the SnakeEnv:
+The results show that there is a negligible benefit beyond 8 threads when using the SnakeEnv (time in sec):
 
 
 | n_threads | initial  | final   |
@@ -117,6 +117,7 @@ bottlenecks, since the plateau is reached at around the same time:
 | 8         | 9.1711   | 18.2394 |
 | 16        | 9.44162  | 18.6533 |
 
+(time in sec)
 
 This plot summarizes the findings:
 

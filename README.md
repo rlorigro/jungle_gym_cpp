@@ -117,6 +117,8 @@ combines gradients from worker threads to update a shared parameter set. The sha
 back to the workers. It is not lock-free as the original A3C paper claims to be, but it offers a reasonably low 
 contention alternative for which each module in the neural network has a separate mutex associated with it. The A3CAgent
 class initializes a thread pool of A2CAgents which have a synchronization lambda function, for simplicity and modularity.
+More information about benchmarking available [here](docs/a3c_benchmark.md)
+
 
 <p align="center">
   <img src="data/a3c_diagram.drawio.svg" alt="Description">
@@ -216,18 +218,6 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 *Apologies for the low GIF quality, this test run includes added noise*
 
-## References
-
-[^1]: Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). *Policy Gradient Methods for Reinforcement Learning with Function Approximation*. In *Advances in Neural Information Processing Systems*, vol. 12. MIT Press.
-
-[^2]: Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2018). *Densely Connected Convolutional Networks*. Preprint at [https://doi.org/10.48550/arXiv.1608.06993](https://doi.org/10.48550/arXiv.1608.06993).
-
-[^3]: Mnih, V., Badia, A. P., Mirza, M., Graves, A., Lillicrap, T., Harley, T., Silver, D., & Kavukcuoglu, K. (2016). *Asynchronous Methods for Deep Reinforcement Learning*. Preprint at [https://doi.org/10.48550/arXiv.1602.01783](https://doi.org/10.48550/arXiv.1602.01783).
-
-[^4]: Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). *CBAM: Convolutional Block Attention Module*. Preprint at [https://doi.org/10.48550/arXiv.1807.06521](https://doi.org/10.48550/arXiv.1807.06521).
-
-[^5]: Williams, R. J. & Peng, J. Function Optimization using Connectionist Reinforcement Learning Algorithms. Connection Science 3, 241–268 (1991).
-
 ## To do
 - Benchmark speed vs n_threads for A3C
 - Add model checkpoints/saving/loading
@@ -249,3 +239,15 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 - ~~Abstract away specific NN classes~~
 - Exhaustive comparison of methods
 - Break out epsilon annealing into simple class (now deprioritized by entropy loss)
+
+## References
+
+[^1]: Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). *Policy Gradient Methods for Reinforcement Learning with Function Approximation*. In *Advances in Neural Information Processing Systems*, vol. 12. MIT Press.
+
+[^2]: Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2018). *Densely Connected Convolutional Networks*. Preprint at [https://doi.org/10.48550/arXiv.1608.06993](https://doi.org/10.48550/arXiv.1608.06993).
+
+[^3]: Mnih, V., Badia, A. P., Mirza, M., Graves, A., Lillicrap, T., Harley, T., Silver, D., & Kavukcuoglu, K. (2016). *Asynchronous Methods for Deep Reinforcement Learning*. Preprint at [https://doi.org/10.48550/arXiv.1602.01783](https://doi.org/10.48550/arXiv.1602.01783).
+
+[^4]: Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). *CBAM: Convolutional Block Attention Module*. Preprint at [https://doi.org/10.48550/arXiv.1807.06521](https://doi.org/10.48550/arXiv.1807.06521).
+
+[^5]: Williams, R. J. & Peng, J. Function Optimization using Connectionist Reinforcement Learning Algorithms. Connection Science 3, 241–268 (1991).

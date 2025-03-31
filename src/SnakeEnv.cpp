@@ -300,7 +300,7 @@ void SnakeEnv::step(int64_t a) {
     auto& tail = snake.back();
 
     if (snake.front() == apple) {
-        cerr << "mmm ... delicious" << '\n';
+        // cerr << "mmm ... delicious" << '\n';
         observation_space_3d[apple.first][apple.second][APPLE] = 0;
         add_apple(false);
         reward += REWARD_APPLE;

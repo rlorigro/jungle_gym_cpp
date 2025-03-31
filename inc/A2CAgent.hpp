@@ -7,7 +7,9 @@
 #include "Policy.hpp"
 #include <functional>
 #include <memory>
+#include <filesystem>
 
+using std::filesystem::path;
 using std::function;
 using std::shared_ptr;
 using std::make_shared;
@@ -42,7 +44,30 @@ public:
         shared_ptr<const Environment> env,
         const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f
         );
+
+    inline void save(const path& output_path) const;
+    inline void load(const path& actor_path, const path& critic_path);
+
 };
+
+
+void A2CAgent::save(const path& output_dir) const{
+    if (not std::filesystem::exists(output_dir)) {
+        std::filesystem::create_directories(output_dir);
+    }
+
+    path actor_path = output_dir / "actor.pt";
+    path critic_path = output_dir / "critic.pt";
+
+    torch::save(actor, actor_path);
+    torch::save(critic, critic_path);
+}
+
+
+inline void A2CAgent::load(const path& actor_path, const path& critic_path) {
+    torch::load(actor, actor_path);
+    torch::load(critic, critic_path);
+}
 
 
 A2CAgent::A2CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic):
@@ -112,7 +137,6 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
 
             if (dist(generator) == 1) {
                 choice = choice_dist(generator);
-                cerr << "random" << '\n';
             }
             else {
                 // choice = torch::argmax(probabilities).item<int64_t>();
@@ -137,15 +161,17 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
         auto actor_loss = td_loss - params.lambda*entropy_loss;
         auto critic_loss = 0.5*episode.compute_critic_loss(params.gamma, false, environment->is_terminated());
 
-        // Print some stats, increment loss using episode, update model if batch_size accumulated
-        cerr << std::left
-        << std::setw(8)  << "episode" << std::setw(8) << e
-        << std::setw(8)  << "length" << std::setw(6) << episode.get_size()
-        << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
-        << std::setw(14) << "avg_entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
-        << std::setw(8)  << "td_loss " << std::setw(12) << td_loss.item<float>()
-        << std::setw(14) << "critic_loss" << std::setw(12) << critic_loss.item<float>()
-        << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
+        if (not params.silent) {
+            // Print some stats, increment loss using episode, update model if batch_size accumulated
+            cerr << std::left
+            << std::setw(8)  << "episode" << std::setw(8) << e
+            << std::setw(8)  << "length" << std::setw(6) << episode.get_size()
+            << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
+            << std::setw(14) << "avg_entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
+            << std::setw(8)  << "td_loss " << std::setw(12) << td_loss.item<float>()
+            << std::setw(14) << "critic_loss" << std::setw(12) << critic_loss.item<float>()
+            << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
+        }
 
         actor_loss.backward();
         critic_loss.backward();

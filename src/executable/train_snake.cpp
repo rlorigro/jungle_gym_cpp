@@ -7,6 +7,10 @@
 #include "A3CAgent.hpp"
 #include "PGAgent.hpp"
 #include "CLI11.hpp"
+#include "misc.hpp"
+
+// This must be included to properly implement mimalloc
+#include "mimalloc_conditional_override.hpp"
 
 #include <ranges>
 #include <stdexcept>
@@ -38,9 +42,12 @@ using std::cerr;
 using std::min;
 
 
-void train_and_test(Hyperparameters& hyperparams, string type){
+void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
+    hyperparams.silent = false;
+
     // For now we fix the grid size
     size_t w = 10;
+    path output_dir = std::filesystem::weakly_canonical("output") / get_timestamp();
 
     if (type == "pg") {
         shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
@@ -51,7 +58,11 @@ void train_and_test(Hyperparameters& hyperparams, string type){
 
         PGAgent agent(hyperparams, actor);
         agent.train(env);
-        agent.test(env);
+        agent.save(output_dir);
+
+        if (not skip_test){
+            agent.test(env);
+        }
     }
     else if (type == "a2c") {
         shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
@@ -63,7 +74,11 @@ void train_and_test(Hyperparameters& hyperparams, string type){
 
         A2CAgent agent(hyperparams, actor, critic);
         agent.train(env);
-        agent.test(env);
+        agent.save(output_dir);
+
+        if (not skip_test){
+            agent.test(env);
+        }
     }
     else if (type == "a3c") {
         shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
@@ -75,7 +90,11 @@ void train_and_test(Hyperparameters& hyperparams, string type){
 
         A3CAgent agent(hyperparams, actor, critic);
         agent.train(env);
-        agent.test(env);
+        agent.save(output_dir);
+
+        if (not skip_test){
+            agent.test(env);
+        }
     }
     else {
         throw runtime_error("ERROR: Unsupported hyperparameter type: " + type);
@@ -87,6 +106,7 @@ int main(int argc, char* argv[]){
     CLI::App app{"App description"};
     Hyperparameters params;
     string type;
+    bool skip_test = false;
 
     app.add_option(
             "--type",
@@ -130,6 +150,11 @@ int main(int argc, char* argv[]){
             params.lambda,
             "lambda");
 
+    app.add_flag(
+            "--skip_test",
+            skip_test,
+            "Dont run the test method (which typically renders the environment)");
+
     try{
         app.parse(argc, argv);
     }
@@ -138,7 +163,7 @@ int main(int argc, char* argv[]){
     }
 
     CPPTRACE_TRY {
-        train_and_test(params, type);
+        train_and_test(params, type, skip_test);
     } CPPTRACE_CATCH(const std::exception& e) {
         std::cerr<<"Exception: "<<e.what()<<std::endl;
         cpptrace::from_current_exception().print_with_snippets();

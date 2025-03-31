@@ -18,6 +18,9 @@ public:
     float lambda = 0.01;
 
     size_t n_threads = 1;
+
+    // For now just controls the stderr log during training (could be expanded?)
+    bool silent = true;
 };
 
 

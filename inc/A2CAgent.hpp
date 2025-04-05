@@ -164,13 +164,12 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
         if (not params.silent) {
             // Print some stats, increment loss using episode, update model if batch_size accumulated
             cerr << std::left
-            << std::setw(8)  << "episode" << std::setw(8) << e
+            << std::setw(8) << e
             << std::setw(8)  << "length" << std::setw(6) << episode.get_size()
             << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
             << std::setw(14) << "avg_entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
             << std::setw(8)  << "td_loss " << std::setw(12) << td_loss.item<float>()
-            << std::setw(14) << "critic_loss" << std::setw(12) << critic_loss.item<float>()
-            << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
+            << std::setw(14) << "critic_loss" << std::setw(12) << critic_loss.item<float>() << '\n';
         }
 
         actor_loss.backward();

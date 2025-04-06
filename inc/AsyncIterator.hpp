@@ -65,6 +65,9 @@ public:
     // View a vector of tensors in chunks, following the same chunk size as the iterator currently has
     inline void apply_view(vector<Tensor>& output);
 
+    // Same as above but return the grad
+    inline void apply_grad_view(vector<Tensor>& output);
+
     inline double get_wait_time_s() const;
 };
 
@@ -134,7 +137,7 @@ AsyncIterator::AsyncIterator(vector<Tensor> data, int64_t chunk_size, int64_t n_
         }
     }
 
-    // cerr << "total chunks: " << indices.size() << '\n';
+    cerr << "total chunks: " << indices.size() << '\n';
     permutations.reserve(n_threads*2);
 
     for (size_t i=0; i<n_threads*2; i++) {
@@ -213,6 +216,15 @@ void AsyncIterator::apply_view(vector<Tensor>& output){
     for (int64_t i=0; i<output.size(); i++) {
         auto [x,y] = dimensions[i];
         output[i] = output[i].view({y,x});
+    }
+}
+
+
+void AsyncIterator::apply_grad_view(vector<Tensor>& output){
+    // Compute a reshaped version of the params to enable fine-grained locking (match the shape of the parent params)
+    for (int64_t i=0; i<output.size(); i++) {
+        auto [x,y] = dimensions[i];
+        output[i] = output[i].grad().view({y,x});
     }
 }
 

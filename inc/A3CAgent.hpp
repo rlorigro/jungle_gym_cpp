@@ -111,12 +111,12 @@ void A3CAgent::train(shared_ptr<const Environment> env){
         optimizer_critic.step(critic_worker->parameters());
         optimizer_actor.step(actor_worker->parameters());
 
-        critic_worker->zero_grad();
-        actor_worker->zero_grad();
-
         // Sync the worker with the shared params
         optimizer_critic.get_params(critic_worker);
         optimizer_actor.get_params(actor_worker);
+
+        actor_worker->zero_grad();
+        critic_worker->zero_grad();
 
         // This should be true to block the worker from stepping its own local optimizer and episode counter
         return true;

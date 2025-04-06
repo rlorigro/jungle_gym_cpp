@@ -91,7 +91,8 @@ int main(int argc, char* argv[]){
     cerr.precision(3);
 
     // --- loop over n_threads ---
-    for (auto n: {1,2,4,8,16}) {
+    // for (auto n: {32}) {
+    for (auto n: {1,2,4,8,16,32}) {
         hyperparams.n_threads = n;
         hyperparams.n_episodes = 1000;
         hyperparams.silent = true;

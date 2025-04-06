@@ -32,7 +32,7 @@ public:
     float alpha = 0.99;
     float eps = 1e-8;
     int64_t n_threads = 1;
-    int64_t chunk_size = 1024;
+    int64_t chunk_size = 2048;
     bool profile = false;
 
     // Initialize running average with a small non-zero value to prevent large first updates
@@ -120,7 +120,6 @@ void RMSPropAsync::get_params(shared_ptr<torch::nn::Module> model){
         throw runtime_error("ERROR: RMSPropAsync: wrong number of parameters");
     }
 
-    // Wait for write operation to complete before reading, but allow concurrent read operations
     torch::NoGradGuard no_grad_guard;
 
     auto p = model->parameters();
@@ -139,16 +138,22 @@ void RMSPropAsync::step(const std::vector<Tensor>& worker_params){
     float e = options.eps;
     float alpha = options.alpha;
 
+    vector<bool> is_defined;
+    for (const auto& item: worker_params) {
+        is_defined.emplace_back(item.grad().defined());
+    }
+
     auto g_w = worker_params;
-    params_iter.apply_view(g_w);
+    params_iter.apply_grad_view(g_w);
 
     params_iter.for_each_chunk([&](const auto& chunk_index, auto theta) {
         auto [a,b] = chunk_index;
 
-        auto& g_wi = g_w[a][b].grad();
+        auto g_wi = g_w[a][b];
         auto g_avg = g_chunks[a][b];
 
-        if (not g_wi.defined()) {
+        if (not is_defined[a]) {
+            // Skip chunks for which there should be no gradient
             return;
         }
 

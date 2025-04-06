@@ -57,6 +57,7 @@ set(SOURCES
         src/Environment.cpp
         src/Episode.cpp
         src/SnakeEnv.cpp
+        src/misc.cpp
 )
 
 project(jungle_gym)
@@ -144,9 +145,12 @@ endif()
 # -------- TESTS --------
 
 set(TESTS
+    test_async_iterator
     test_snake_env
     test_sdl2
     benchmark_a3c
+    test_contention
+    test_chunking
 )
 
 foreach(FILENAME_PREFIX ${TESTS})

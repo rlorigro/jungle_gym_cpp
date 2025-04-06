@@ -21,6 +21,8 @@ public:
 
     // For now just controls the stderr log during training (could be expanded?)
     bool silent = true;
+
+    bool profile = false;
 };
 
 

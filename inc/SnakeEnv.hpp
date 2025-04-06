@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Environment.hpp"
+#include "misc.hpp"
 
 #include <torch/torch.h>
 #include <random>
@@ -19,8 +20,6 @@ using std::mt19937;
 using std::array;
 using std::atomic;
 using std::vector;
-
-using coord_t = pair<int64_t, int64_t>;
 
 namespace JungleGym{
 

@@ -56,7 +56,8 @@ The results show that there is a negligible benefit beyond 8 threads when using 
 | 16        | 14.5809  | 19.288  |
 
 
-However, surprisingly, perf reports very low lock contention when profiling the same benchmark at 16 threads
+However, surprisingly, perf reports very low lock contention when profiling the same benchmark at 16 threads. This
+is unlikely to be accurate...
 ```
 sudo perf lock record ./benchmark_a3c
 perf lock contention
@@ -73,21 +74,6 @@ perf lock contention
         27      1.46 ms     78.19 us     53.94 us     spinlock   Unknown
         28      1.39 ms     78.95 us     49.81 us     spinlock   Unknown
         25      1.35 ms     78.31 us     54.17 us     spinlock   Unknown
-        62    673.54 us     28.02 us     10.86 us     spinlock   Unknown
-        34    455.48 us     28.30 us     13.40 us     spinlock   Unknown
-         8    426.82 us     76.86 us     53.35 us     spinlock   Unknown
-        29    375.11 us     36.03 us     12.93 us     spinlock   Unknown
-         2    234.12 us    121.09 us    117.06 us      rwsem:R   Unknown
-         1     52.30 us     52.30 us     52.30 us     spinlock   Unknown
-         2     42.57 us     23.08 us     21.28 us     spinlock   Unknown
-         5     39.17 us     11.56 us      7.84 us        mutex   Unknown
-         1     31.91 us     31.91 us     31.91 us      rwsem:R   Unknown
-         1     30.14 us     30.14 us     30.14 us     spinlock   Unknown
-         1     14.46 us     14.46 us     14.46 us     spinlock   Unknown
-         1      6.77 us      6.77 us      6.77 us     spinlock   Unknown
-         1      5.55 us      5.55 us      5.55 us     spinlock   Unknown
-         1      5.27 us      5.27 us      5.27 us      rwsem:W   Unknown
-         1      4.82 us      4.82 us      4.82 us     spinlock   Unknown
 ```
 
 We can check the flame graph to see what is the relative proportion of time spent on rollouts vs optimizer:
@@ -103,7 +89,7 @@ Within the step function, the majority of the cost is in computing the update:
 ![a3c_16_thread_flamegraph.png](../data/a3c_16_thread_flamegraph_step_fn.png)
 
 Very little time is attributed to the mutex (highlighted), surprisingly. This suggests that some other form of thread 
-overhead is likely the bottleneck, such as cache misses or memory bandwidth. 
+overhead could be the bottleneck, or that the profiling is not properly capturing the wait time. 
 
 To test if memory-related overhead may be improved with mimalloc (a custom memory allocator) I added the option to 
 compile with it. The result is a notable improvement in speed, but not necessarily an improvement in thread-related 
@@ -122,3 +108,24 @@ bottlenecks, since the plateau is reached at around the same time:
 This plot summarizes the findings:
 
 ![benchmark_a3c_plot.png](../data/benchmark_a3c_plot.png)
+
+### Manually profiling
+
+As it turns out, using a simple timer and an atomic counter gives much more informative results:
+
+| n  | total_s initial | wait_s initial | total_s final | wait_s final |
+|----|-----------------|----------------|---------------|--------------|
+| 1  | 33.7            | 0.00875        | 71.7          | 0.0109       |
+| 2  | 18.1            | 0.405          | 38.3          | 0.257        |
+| 4  | 10.7            | 0.673          | 21.7          | 0.432        |
+| 8  | 9.34            | 1.31           | 18.1          | 0.742        |
+| 16 | 9.26            | 4.16           | 18.9          | 1.72         |
+
+where total_s is the wall clock time and wait_s is the average total mutex wait time per thread (total_wait_time_s/n).
+
+Clearly as more threads are added, the mutex wait time becomes a more significant portion of the total time. Also, we 
+now see that wait time is less significant when episodes are more computationally intensive (longer) than the update 
+step by looking at the "final" columns.
+
+Overall this suggests that a more fine grained locking or some specialized lock-minimal data structure is needed.
+

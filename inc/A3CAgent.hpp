@@ -39,7 +39,13 @@ public:
     inline void test(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
     inline void load(const path& actor_path, const path& critic_path);
+    inline double get_wait_time_s() const;
 };
+
+
+double A3CAgent::get_wait_time_s() const{
+    return optimizer_actor.get_wait_time_s() + optimizer_critic.get_wait_time_s();
+}
 
 
 void A3CAgent::save(const path& output_dir) const{
@@ -61,11 +67,12 @@ inline void A3CAgent::load(const path& actor_path, const path& critic_path) {
 }
 
 
+// TODO: switch name to "hyperparams" to avoid confusion
 A3CAgent::A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic):
         actor(actor),
         critic(critic),
-        optimizer_actor(actor->parameters(), params.learn_rate),
-        optimizer_critic(critic->parameters(), params.learn_rate),
+        optimizer_actor(actor->parameters(), params.learn_rate, params.profile),
+        optimizer_critic(critic->parameters(), params.learn_rate, params.profile),
         params(params)
 {
     if (!actor) {

@@ -1,11 +1,21 @@
 #pragma once
 
-#include <torch/torch.h>
 #include <iostream>
+#include <iomanip>
+#include <string>
+#include <cstdio>
+#include <ctime>
+#include <utility>
 
-std::string get_timestamp() {
-    std::ostringstream oss;
-    std::time_t t = std::time(nullptr);
-    oss << std::put_time(std::localtime(&t), "%Y-%m-%d_%H-%M-%S");
-    return oss.str();
+using std::pair;
+
+
+namespace JungleGym{
+
+using coord_t = pair<int64_t, int64_t>;
+
+std::string get_timestamp();
+
+int64_t nearest_factor(int64_t n, int64_t f);
+
 }

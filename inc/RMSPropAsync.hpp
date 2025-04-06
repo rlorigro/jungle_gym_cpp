@@ -1,10 +1,11 @@
 #pragma once
 
+#include <shared_mutex>
 #include <iostream>
 #include <stdexcept>
-#include <memory>
 #include <random>
 #include <vector>
+#include "AsyncIterator.hpp"
 #include "torch/torch.h"
 
 using std::runtime_error;
@@ -20,6 +21,7 @@ using std::cerr;
 using torch::Tensor;
 using torch::optim::RMSpropOptions;
 
+using namespace std::chrono;
 
 namespace JungleGym{
 
@@ -29,11 +31,15 @@ public:
     float lr = 0.0001;
     float alpha = 0.99;
     float eps = 1e-8;
+    int64_t n_threads = 1;
+    int64_t chunk_size = 1024;
+    bool profile = false;
 
     // Initialize running average with a small non-zero value to prevent large first updates
     float g_init = 10e-3;
 
     inline RMSPropAsyncOptions(float lr, float alpha, float eps, float g_init);
+    inline RMSPropAsyncOptions(float lr, bool profile);
     inline RMSPropAsyncOptions(float lr);
 };
 
@@ -51,78 +57,62 @@ RMSPropAsyncOptions::RMSPropAsyncOptions(float lr):
 {}
 
 
+RMSPropAsyncOptions::RMSPropAsyncOptions(float lr, bool profile):
+    lr(lr),
+    profile(profile)
+{}
+
+
 class RMSPropAsync{
     // Parameters to be trained
     vector<Tensor> params;
 
-    // Running elementwise average used for regularizing the updates. Maintained as Exponential Moving Average
-    vector<Tensor> g;
+    // Convenience wrapper for fine-grained locking/chunking
+    AsyncIterator params_iter;
 
-    vector <vector <size_t> > permutations;
-    atomic<size_t> p_index;
+    // Running elementwise average used for regularizing the updates. Maintained as Exponential Moving Average.
+    // Viewed as a shape that enables chunking, same dims as params_iter.
+    vector<Tensor> g_chunks;
 
     const RMSPropAsyncOptions options;
-    vector<unique_ptr<shared_mutex>> m;
 
 public:
     inline RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options);
+    inline RMSPropAsync(vector<Tensor> params, float lr, bool profile);
     inline RMSPropAsync(vector<Tensor> params, float lr);
     inline void step(const std::vector<Tensor>& worker_params);
     inline void get_params(shared_ptr<torch::nn::Module> model);
+    inline double get_wait_time_s() const;
 };
+
+
+double RMSPropAsync::get_wait_time_s() const{
+    return params_iter.get_wait_time_s();
+}
 
 
 RMSPropAsync::RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options):
         params(std::move(params)),
-        options(std::move(options)),
-        p_index(0)
+        params_iter(this->params, options.chunk_size, options.n_threads, options.profile),
+        options(std::move(options))
 {
     // Initialize g moving average
     for (const auto& p : this->params) {
-        g.emplace_back(torch::full(p.sizes(), options.g_init, torch::kFloat));
-        m.emplace_back(std::make_unique<std::shared_mutex>());
+        g_chunks.emplace_back(torch::full(p.sizes(), options.g_init, torch::kFloat));
     }
 
-    mt19937 generator((random_device())());
-
-    std::vector<size_t> indices(this->params.size());
-    std::iota(indices.begin(), indices.end(), 0);
-
-    cerr << "initializing " << 256 << " permutations of size " << this->params.size() << '\n';
-    cerr << std::flush;
-
-    permutations.reserve(256);
-    for (size_t i=0; i<256; i++) {
-        std::shuffle(indices.begin(), indices.end(), generator);
-        permutations.push_back(indices);
-    }
+    params_iter.apply_view(g_chunks);
 }
 
 
 RMSPropAsync::RMSPropAsync(vector<Tensor> params, float lr):
-        params(std::move(params)),
-        options(lr)
-{
-    // Initialize g moving average
-    for (const auto& p : this->params) {
-        g.emplace_back(torch::full(p.sizes(), options.g_init, torch::kFloat));
-        m.emplace_back(std::make_unique<std::shared_mutex>());
-    }
+    RMSPropAsync(std::move(params), RMSPropAsyncOptions(lr))
+{}
 
-    mt19937 generator((random_device())());
 
-    std::vector<size_t> indices(this->params.size());
-    std::iota(indices.begin(), indices.end(), 0);
-
-    cerr << "initializing " << 256 << " permutations of size " << this->params.size() << '\n';
-    cerr << std::flush;
-
-    permutations.reserve(256);
-    for (size_t i=0; i<256; i++) {
-        std::shuffle(indices.begin(), indices.end(), generator);
-        permutations.push_back(indices);
-    }
-}
+RMSPropAsync::RMSPropAsync(vector<Tensor> params, float lr, bool profile):
+    RMSPropAsync(std::move(params), RMSPropAsyncOptions(lr, profile))
+{}
 
 
 void RMSPropAsync::get_params(shared_ptr<torch::nn::Module> model){
@@ -133,18 +123,8 @@ void RMSPropAsync::get_params(shared_ptr<torch::nn::Module> model){
     // Wait for write operation to complete before reading, but allow concurrent read operations
     torch::NoGradGuard no_grad_guard;
 
-    // Get a precomputed shuffled set of parameter indexes for iterating
-    auto p = p_index.fetch_add(1);
-    p = p % permutations.size();
-
-    const auto& indices = permutations[p];
-
-    for (size_t x=0; x<params.size(); x++){
-        auto i = indices[x];
-        shared_lock lock(*m[i]);
-
-        model->parameters()[i].copy_(params[i]);
-    }
+    auto p = model->parameters();
+    params_iter.read(p);
 }
 
 
@@ -157,27 +137,19 @@ void RMSPropAsync::step(const std::vector<Tensor>& worker_params){
 
     float lr = options.lr;
     float e = options.eps;
-    float a = options.alpha;
+    float alpha = options.alpha;
 
-    // Get a precomputed shuffled set of parameter indexes for iterating
-    auto p = p_index.fetch_add(1);
-    p = p % permutations.size();
+    auto g_w = worker_params;
+    params_iter.apply_view(g_w);
 
-    const auto& indices = permutations[p];
+    params_iter.for_each_chunk([&](const auto& chunk_index, auto theta) {
+        auto [a,b] = chunk_index;
 
-    for (size_t x=0; x<worker_params.size(); x++){
-        auto i = indices[x];
-
-        // Block all threads from accessing this region of the parameters during writing
-        unique_lock lock(*m[i]);
-
-        auto& g_wi = worker_params[i].grad();
-
-        auto& g_avg = g[i];
-        auto& theta = params[i];
+        auto& g_wi = g_w[a][b].grad();
+        auto g_avg = g_chunks[a][b];
 
         if (not g_wi.defined()) {
-            continue;
+            return;
         }
 
         // Imitated from libtorch source
@@ -187,9 +159,9 @@ void RMSPropAsync::step(const std::vector<Tensor>& worker_params){
         theta -= lr*(g_wi/(torch::sqrt(g_avg + e)));
 
         // Then update the g avg
-        g_avg *= a;
-        g_avg += ((1 - a) * torch::pow(g_wi,2));
-    }
+        g_avg *= alpha;
+        g_avg += (1 - alpha) * torch::pow(g_wi,2);
+    });
 }
 
 

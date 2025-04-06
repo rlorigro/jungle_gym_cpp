@@ -117,7 +117,7 @@ combines gradients from worker threads to update a shared parameter set. The sha
 back to the workers. It is not lock-free as the original A3C paper claims to be, but it offers a reasonably low 
 contention alternative for which each module in the neural network has a separate mutex associated with it. The A3CAgent
 class initializes a thread pool of A2CAgents which have a synchronization lambda function, for simplicity and modularity.
-More information about benchmarking available [here](docs/a3c_benchmark.md)
+
 
 
 <p align="center">
@@ -143,6 +143,14 @@ $$
 - $\alpha$ : The decay factor for the moving average.
 - $\epsilon$ : A small constant added for numerical stability.
 
+The scaling behavior of RMSPropAsync is as follows:
+
+<p align="center">
+  <img src="data/episodes_per_second_16thread.png" alt="Description">
+</p>
+
+Where "naive" refers to the simple linear iteration of the vector<Tensor> in the parameters, and the others use finer 
+grained, uniform chunk sizes. More information about benchmarking available [here](docs/a3c_benchmark.md).
 
 ## Models
 
@@ -219,8 +227,8 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 *Apologies for the low GIF quality, this test run includes added noise*
 
 ## To do
-- Benchmark speed vs n_threads for A3C
-- Add model checkpoints/saving/loading
+~~- Benchmark speed vs n_threads for A3C~~
+~~- Add model checkpoints/saving/loading~~
 - Print critic's value estimation for every state during test demo
 - plot attention map
 - ~~implement a3c (now currently a2c)~~

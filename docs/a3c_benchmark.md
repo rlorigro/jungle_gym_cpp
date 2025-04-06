@@ -129,3 +129,45 @@ step by looking at the "final" columns.
 
 Overall this suggests that a more fine grained locking or some specialized lock-minimal data structure is needed.
 
+### Improving scaling with fine-grained locking
+
+The `torch::nn::Module` stores its parameters as a vector of Tensors, and the naive approach to prevent race conditions 
+in a multithreaded optimizer is to lock one Tensor at a time, read/write, and then unlock and move to the next. However,
+this has 2 problems:
+
+1. A typical RL policy may not have many modules, and therefore may have fewer tensors than threads
+2. Sequential iteration may induce lock convoying (similar effect to a traffic jam on the freeway)
+
+Here is how the layer shapes of the simple Densenet/CBAM architecture look:
+
+```
+module 0:  [8, 4, 3, 3]
+module 1:  [8]
+module 2:  [16, 12, 3, 3]
+module 3:  [16]
+module 4:  [256, 2800]
+module 5:  [256]
+module 6:  [128, 256]
+module 7:  [128]
+module 8:  [1, 128]
+module 9:  [1]
+module 10: [256]
+module 11: [256]
+module 12: [128]
+module 13: [128]
+```
+
+So clearly, there is both a non-uniform layer size, and not many of layers in total. The solution to these problems is
+then to use chunking to split the update steps into smaller blocks so that it is unlikely that any two threads are using
+the same block at the same time. In addition to this, we can have each thread iterate the blocks in random order to
+prevent convoying.
+
+![episodes_per_second_16thread.png](../data/episodes_per_second_16thread.png)
+
+(benchmarked using the "final" model which often survives $\tau$ steps before updating)
+
+
+Based on these results, the chunked optimizer notably reduces contention compared to the naive implementation. However, 
+there is some cost to pay for tuning chunk size correctly, and the asymptotic behavior is still similar in the long 
+run. It seems that there is still some memory bandwidth or caching overhead here. The SnakeEnv (used here) is also extremely 
+efficient and not a large workload relative to the update step or the model inference.

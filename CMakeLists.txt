@@ -6,7 +6,7 @@ message(STATUS
     debug:          invoke less optimization and more transparency for debugging (including ASan)
     no_san:         skip AddressSanitizer and other sanitizers (only relevant when using debug=1)
     dev:            skip fetching external projects (must NOT be invoked on first compilation)
-    no_mimalloc     skip building/linking mimalloc
+    mimalloc        build/link mimalloc
     "
 )
 
@@ -14,8 +14,8 @@ message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "CMAKE_SYSTEM: ${CMAKE_SYSTEM}")
 
-if (NOT no_mimalloc OR NOT DEFINED no_mimalloc)
-    set(USE_MIMALLOC ON)
+if (NOT use_mimalloc OR NOT DEFINED use_mimalloc)
+    set(USE_MIMALLOC OFF)
 endif()
 
 # Compiler options.

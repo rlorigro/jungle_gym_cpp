@@ -149,8 +149,9 @@ The scaling behavior of RMSPropAsync is as follows:
   <img src="data/episodes_per_second_16thread.png" alt="Description">
 </p>
 
-Where "naive" refers to the simple linear iteration of the vector<Tensor> in the parameters, and the others use finer 
-grained, uniform chunk sizes. More information about benchmarking available [here](docs/a3c_benchmark.md).
+Where "naive" refers to the simple linear iteration of the vector<Tensor> of parameters, and the others use finer 
+grained, uniform chunk sizes, and random iteration order. Episode lengths ($\tau$) are 16 steps. More information about 
+benchmarking available [here](docs/a3c_benchmark.md). 
 
 ## Models
 

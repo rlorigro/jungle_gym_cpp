@@ -228,8 +228,8 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 *Apologies for the low GIF quality, this test run includes added noise*
 
 ## To do
-~~- Benchmark speed vs n_threads for A3C~~
-~~- Add model checkpoints/saving/loading~~
+- ~~Benchmark speed vs n_threads for A3C~~
+- ~~Add model checkpoints/saving/loading~~
 - Print critic's value estimation for every state during test demo
 - plot attention map
 - ~~implement a3c (now currently a2c)~~

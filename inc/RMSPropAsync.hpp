@@ -76,6 +76,9 @@ class RMSPropAsync{
 
     const RMSPropAsyncOptions options;
 
+    // This parameter gets its own separate atomic variable to enable LR schedulers to interface with it
+    atomic<float> lr;
+
 public:
     inline RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options);
     inline RMSPropAsync(vector<Tensor> params, float lr, bool profile);
@@ -94,7 +97,8 @@ double RMSPropAsync::get_wait_time_s() const{
 RMSPropAsync::RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options):
         params(std::move(params)),
         params_iter(this->params, options.chunk_size, options.n_threads, options.profile),
-        options(std::move(options))
+        options(std::move(options)),
+        lr(this->options.lr)
 {
     // Initialize g moving average
     for (const auto& p : this->params) {
@@ -134,7 +138,7 @@ void RMSPropAsync::step(const std::vector<Tensor>& worker_params){
 
     torch::NoGradGuard no_grad_guard;
 
-    float lr = options.lr;
+    float l = lr;
     float e = options.eps;
     float alpha = options.alpha;
 
@@ -161,7 +165,7 @@ void RMSPropAsync::step(const std::vector<Tensor>& worker_params){
         TORCH_CHECK(!g_wi.is_sparse(), "RMSpropAsync does not support sparse gradients");
 
         // First apply the gradient
-        theta -= lr*(g_wi/(torch::sqrt(g_avg + e)));
+        theta -= l*(g_wi/(torch::sqrt(g_avg + e)));
 
         // Then update the g avg
         g_avg *= alpha;

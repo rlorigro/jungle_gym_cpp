@@ -27,10 +27,10 @@ class A2CAgent {
     Episode episode;
     torch::optim::RMSprop optimizer_actor;
     torch::optim::RMSprop optimizer_critic;
-    Hyperparameters params;
+    Hyperparameters hyperparams;
 
 public:
-    inline A2CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic);
+    inline A2CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
 
     inline void train(shared_ptr<const Environment> env);
     inline void test(shared_ptr<const Environment> env);
@@ -70,13 +70,13 @@ inline void A2CAgent::load(const path& actor_path, const path& critic_path) {
 }
 
 
-A2CAgent::A2CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic):
+A2CAgent::A2CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic):
         actor(actor),
         critic(critic),
         episode(),
-        optimizer_actor(actor->parameters(), torch::optim::RMSpropOptions(params.learn_rate)),
-        optimizer_critic(critic->parameters(), torch::optim::RMSpropOptions(params.learn_rate)),
-        params(params)
+        optimizer_actor(actor->parameters(), torch::optim::RMSpropOptions(hyperparams.learn_rate)),
+        optimizer_critic(critic->parameters(), torch::optim::RMSpropOptions(hyperparams.learn_rate)),
+        hyperparams(hyperparams)
 {
     if (!actor) {
         throw std::runtime_error("ERROR: actor pointer is null");
@@ -115,14 +115,14 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
     // TODO: un-remove epsilon greedy implementation? make optional?
     float epsilon = 0;
 
-    while (e < params.n_episodes) {
+    while (e < hyperparams.n_episodes) {
         episode.clear();
 
         // exponential decay that terminates at ~0.018
         // epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(size_t(eps_norm))));
         std::bernoulli_distribution dist(epsilon);
 
-        for (size_t s=0; s<params.episode_length; s++) {
+        for (size_t s=0; s<hyperparams.episode_length; s++) {
             Tensor input = environment->get_observation_space();
             input += 0.0001;
 
@@ -155,18 +155,18 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             }
         }
 
-        auto td_loss = episode.compute_td_loss(params.gamma, false, true, environment->is_terminated());
+        auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, true, environment->is_terminated());
         auto entropy_loss = episode.compute_entropy_loss(false, true);
 
-        auto actor_loss = td_loss - params.lambda*entropy_loss;
-        auto critic_loss = 0.5*episode.compute_critic_loss(params.gamma, false, environment->is_terminated());
+        auto actor_loss = td_loss - hyperparams.lambda*entropy_loss;
+        auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, false, environment->is_terminated());
 
-        if (not params.silent and e % 10 == 0) {
+        if (not hyperparams.silent and e % 10 == 0) {
             // Print some stats, increment loss using episode, update model if batch_size accumulated
             cerr << std::setprecision(3) << std::left
             << std::setw(7) << e
             << std::setw(4) << episode.get_size()
-            << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*params.lambda
+            << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
             << std::setw(8) << "entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
             << std::setw(5)  << "l_td " << std::setw(12) << td_loss.item<float>()
             << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>() << '\n';
@@ -189,13 +189,13 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
 
         // Periodically apply the accumulated gradient to the model
         // if (e % std::max(params.batch_size/2,size_t(1)) == 0){
-        if (e % params.batch_size == 0){
+        if (e % hyperparams.batch_size == 0){
             optimizer_critic.step();
             optimizer_critic.zero_grad();
         }
 
         // Periodically apply the accumulated gradient to the model
-        if (e % params.batch_size == 0){
+        if (e % hyperparams.batch_size == 0){
             optimizer_actor.step();
             optimizer_actor.zero_grad();
         }
@@ -215,10 +215,10 @@ void A2CAgent::test(shared_ptr<const Environment> env){
     size_t e = 0;
     std::thread t(std::bind(&Environment::render, environment, false));
 
-    while (e < params.n_episodes) {
+    while (e < hyperparams.n_episodes) {
         environment->reset();
 
-        for (size_t s=0; s<params.episode_length; s++) {
+        for (size_t s=0; s<hyperparams.episode_length; s++) {
             auto input = environment->get_observation_space().clone();
             input += 0.0001;
 

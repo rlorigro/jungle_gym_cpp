@@ -31,10 +31,10 @@ class A3CAgent {
     RMSPropAsync optimizer_actor;
     RMSPropAsync optimizer_critic;
 
-    Hyperparameters params;
+    Hyperparameters hyperparams;
 
 public:
-    inline A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic);
+    inline A3CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
     inline void train(shared_ptr<const Environment> env);
     inline void test(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
@@ -68,12 +68,12 @@ inline void A3CAgent::load(const path& actor_path, const path& critic_path) {
 
 
 // TODO: switch name to "hyperparams" to avoid confusion
-A3CAgent::A3CAgent(const Hyperparameters& params, shared_ptr<Model> actor, shared_ptr<Model> critic):
+A3CAgent::A3CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic):
         actor(actor),
         critic(critic),
-        optimizer_actor(actor->parameters(), params.learn_rate, params.profile),
-        optimizer_critic(critic->parameters(), params.learn_rate, params.profile),
-        params(params)
+        optimizer_actor(actor->parameters(), hyperparams.learn_rate, hyperparams.profile),
+        optimizer_critic(critic->parameters(), hyperparams.learn_rate, hyperparams.profile),
+        hyperparams(hyperparams)
 {
     if (!actor) {
         throw runtime_error("ERROR: actor pointer is null");
@@ -95,7 +95,7 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     // Sets the number of threads to be used in parallel region
     torch::set_num_threads(1);
 
-    if (not params.silent) {
+    if (not hyperparams.silent) {
         cerr << "n_torch_threads: " << n_torch_threads << " ... setting to 1 for A3C training." << '\n';
     }
 
@@ -123,9 +123,9 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     };
 
     vector<thread> threads;
-    for (size_t i=0; i<params.n_threads; i++) {
+    for (size_t i=0; i<hyperparams.n_threads; i++) {
         threads.emplace_back([&]() {
-            A2CAgent worker(params, actor->clone(), critic->clone());
+            A2CAgent worker(hyperparams, actor->clone(), critic->clone());
             worker.train(environment, sync_fn);
         });
     }
@@ -134,7 +134,7 @@ void A3CAgent::train(shared_ptr<const Environment> env){
         t.join();
     }
 
-    if (not params.silent) {
+    if (not hyperparams.silent) {
         cerr << "resetting torch threads to: " << n_torch_threads << '\n';
     }
 

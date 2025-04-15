@@ -97,10 +97,11 @@ when any value tends toward 1. Entropy regularization therefore rewards explorat
 
 ### 3. Actor-critic Policy Gradient with entropy regularization (A2C or AAC)
 
-This method employs a second network which approximates the Value function for a given state. During training, the
-policy attempts to maximize the advantage, which describes the benefit of taking a given action over the expected reward
-(given by the critic). In addition to making the objective relative to a "baseline", this provides additional stability
-in the update step by rescaling the loss consistently across a wide range of possible absolute rewards.
+This method employs a second network that approximates the value function for a given state. During training, the actor
+attempts to maximize the *advantage*, which captures how much better a particular action is than the expected value 
+predicted by the critic. Subtracting this baseline reduces the variance of the policy gradient and provides more stable 
+updates, even when the absolute scale of the rewards varies widely. While the critic loss remains sensitive to raw 
+reward magnitude, the advantage-based policy (actor) update is relatively well-behaved.
 
 $$
 L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] + \lambda H(\pi_\theta(a_t | s_t)) \right)

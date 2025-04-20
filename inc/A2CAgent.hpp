@@ -115,6 +115,8 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
     // TODO: un-remove epsilon greedy implementation? make optional?
     float epsilon = 0;
 
+    float reward_ema = 0;
+
     while (e < hyperparams.n_episodes) {
         episode.clear();
 
@@ -150,6 +152,8 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             episode.update(log_probabilities, value_predict, choice, reward);
 
             if (environment->is_terminated() or environment->is_truncated()) {
+                reward_ema = 0.99*reward_ema + (1 - 0.99)*environment->get_total_reward();
+
                 environment->reset();
                 break;
             }
@@ -162,14 +166,18 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
         auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, false, environment->is_terminated());
 
         if (not hyperparams.silent and e % 10 == 0) {
+            auto total_reward = episode.get_total_reward();
+
             // Print some stats, increment loss using episode, update model if batch_size accumulated
             cerr << std::setprecision(3) << std::left
             << std::setw(7) << e
             << std::setw(4) << episode.get_size()
             << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
             << std::setw(8) << "entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
-            << std::setw(5)  << "l_td " << std::setw(12) << td_loss.item<float>()
-            << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>() << '\n';
+            << std::setw(5) << "l_td " << std::setw(12) << td_loss.item<float>()
+            << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()
+            << std::setw(10) << "reward_ep" << std::setw(10) << total_reward
+            << std::setw(11) << "reward_ema" << std::setw(12) << reward_ema << '\n';
         }
 
         actor_loss.backward();

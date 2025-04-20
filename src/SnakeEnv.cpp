@@ -61,6 +61,7 @@ void SnakeEnv::reset() {
     terminated = false;
     truncated = false;
     reward = 0;
+    total_reward = 0;
     cached_action.store(STRAIGHT);
     initialize_snake();
     std::ranges::shuffle(xy_permutation, generator);
@@ -280,6 +281,7 @@ void SnakeEnv::step(int64_t a) {
     if (not is_open(next)) {
         terminated = true;
         reward = REWARD_COLLISION;
+        total_reward += reward;
         return;
     }
 
@@ -318,6 +320,8 @@ void SnakeEnv::step(int64_t a) {
     if (patience_counter == patience_limit) {
         truncated = true;
     }
+
+    total_reward += reward;
 
     // cerr << "step" << '\n';
     // cerr << observation_space.sum(2,false) << '\n';

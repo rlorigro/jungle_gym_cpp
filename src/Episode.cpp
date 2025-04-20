@@ -27,6 +27,16 @@ size_t Episode::get_size() const{
 }
 
 
+float Episode::get_total_reward() const {
+    float x = 0;
+    for (const auto& r: rewards) {
+        x += r;
+    }
+
+    return x;
+}
+
+
 void Episode::update(Tensor& log_action_probs, int64_t action_index, float reward){
     // TODO: states
     log_action_distributions.emplace_back(log_action_probs);

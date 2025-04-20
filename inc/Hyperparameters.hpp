@@ -10,6 +10,7 @@ public:
     size_t n_episodes = 2000;
     size_t batch_size = 16;
     float learn_rate = 5e-5;
+    float learn_rate_final = learn_rate;
 
     // Decay rate of TD recurrence
     float gamma = 0.7;

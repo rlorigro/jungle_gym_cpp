@@ -21,6 +21,7 @@ class Environment{
 protected:
     torch::Tensor action_space;
     torch::Tensor observation_space;
+    float total_reward;
     float reward;
     atomic<bool> terminated;
     atomic<bool> truncated;
@@ -40,6 +41,9 @@ public:
 
     // The reward given by the current step in the environment
     float get_reward() const;
+
+    // The reward accumulated since the environment was last reset (not necessarily equivalent to an "episode")
+    float get_total_reward() const;
 
     // Whether the agent reaches the terminal state (as defined under the MDP of the task) which can be positive or
     // negative. An example is reaching the goal state or moving into the lava from the Sutton and Barto Gridworld

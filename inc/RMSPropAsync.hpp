@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <random>
 #include <vector>
+#include <mutex>
 #include "AsyncIterator.hpp"
 #include "torch/torch.h"
 
@@ -16,6 +17,7 @@ using std::shared_lock;
 using std::unique_ptr;
 using std::shared_ptr;
 using std::vector;
+using std::mutex;
 using std::cerr;
 
 using torch::Tensor;
@@ -76,14 +78,19 @@ class RMSPropAsync{
 
     const RMSPropAsyncOptions options;
 
-    // This parameter gets its own separate atomic variable to enable LR schedulers to interface with it
+public:
+    // This parameter gets its own separate atomic variable to ensure no funny business. Public so that it can be set
+    // by a scheduler
     atomic<float> lr;
 
-public:
     inline RMSPropAsync(vector<Tensor> params, RMSPropAsyncOptions options);
     inline RMSPropAsync(vector<Tensor> params, float lr, bool profile);
     inline RMSPropAsync(vector<Tensor> params, float lr);
+
+    /// Updating
     inline void step(const std::vector<Tensor>& worker_params);
+
+    /// Accessing
     inline void get_params(shared_ptr<torch::nn::Module> model);
     inline double get_wait_time_s() const;
 };

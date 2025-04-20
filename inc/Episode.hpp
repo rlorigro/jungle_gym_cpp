@@ -43,6 +43,8 @@ public:
     // Return the sum or mean depending on `mean`
     [[nodiscard]] Tensor compute_critic_loss(float gamma, bool mean, bool terminal) const;
 
+    float get_total_reward() const;
+
     /**
      *
      * @param log_action_probs the log_softmax output distribution for a PG policy at a given time step

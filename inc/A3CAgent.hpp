@@ -104,6 +104,12 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     environment->reset();
     atomic<size_t> episode;
 
+    const auto lr_0 = hyperparams.learn_rate;
+    const auto lr_n = hyperparams.learn_rate_final;
+    const float n = hyperparams.n_episodes;
+
+    const auto lr_step = (lr_n - lr_0) / n;
+
     auto sync_fn = [&](shared_ptr<Model> actor_worker, shared_ptr<Model> critic_worker, size_t& e) {
         e = episode.fetch_add(1);
 
@@ -117,6 +123,9 @@ void A3CAgent::train(shared_ptr<const Environment> env){
 
         actor_worker->zero_grad();
         critic_worker->zero_grad();
+
+        optimizer_critic.lr = lr_0 + e*lr_step;
+        optimizer_actor.lr = lr_0 + e*lr_step;
 
         // This should be true to block the worker from stepping its own local optimizer and episode counter
         return true;

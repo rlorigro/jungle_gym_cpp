@@ -145,6 +145,11 @@ int main(int argc, char* argv[]){
             params.learn_rate,
             "learn_rate");
 
+    auto* lr_final = app.add_option(
+            "--learn_rate_final",
+            params.learn_rate_final,
+            "learn_rate at end of training, scheduled linearly");
+
     app.add_option(
             "--lambda",
             params.lambda,
@@ -160,6 +165,11 @@ int main(int argc, char* argv[]){
     }
     catch (const CLI::ParseError &e) {
         return app.exit(e);
+    }
+
+    if (lr_final->count() == 0) {
+        params.learn_rate_final = params.learn_rate;
+        cerr << "learn_rate_final set to learn_rate: " << params.learn_rate_final << '\n';
     }
 
     CPPTRACE_TRY {

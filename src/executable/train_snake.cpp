@@ -5,6 +5,7 @@
 #include "Policy.hpp"
 #include "A2CAgent.hpp"
 #include "A3CAgent.hpp"
+#include "PPOAgent.hpp"
 #include "PGAgent.hpp"
 #include "CLI11.hpp"
 #include "misc.hpp"
@@ -96,6 +97,22 @@ void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
             agent.test(env);
         }
     }
+    else if (type == "ppo") {
+        shared_ptr<SnakeEnv> env = make_shared<SnakeEnv>(w,w);
+
+        int64_t out_size = env->get_action_space().numel();
+        cerr << "action space: " << out_size << '\n';
+        shared_ptr<SimpleConv> actor = make_shared<SimpleConv>(w,w,4,out_size);
+        shared_ptr<SimpleConv> critic = make_shared<SimpleConv>(w,w,4,1);
+
+        PPOAgent agent(hyperparams, actor, critic);
+        agent.train(env);
+        agent.save(output_dir);
+
+        if (not skip_test){
+            agent.test(env);
+        }
+    }
     else {
         throw runtime_error("ERROR: Unsupported hyperparameter type: " + type);
     }
@@ -113,7 +130,9 @@ int main(int argc, char* argv[]){
             type,
             "What RL algorithm to use:\n"
             "\t'pg' = policy gradient\n"
-            "\t'ac' = actor critic");
+            "\t'a3c' = actor critic"
+            "\t'ppo' = proximal policy optimization (using L_CLIP)"
+            );
 
     app.add_option(
             "--episode_length",

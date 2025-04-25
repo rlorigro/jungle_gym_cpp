@@ -106,10 +106,6 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
     shared_ptr<Environment> environment = env->clone();
     environment->reset();
 
-    // Used for deciding if we want to act greedily or sample randomly
-    mt19937 generator(1337);
-    std::uniform_int_distribution<int64_t> choice_dist(0,4-1);
-
     size_t e = 0;
 
     // TODO: un-remove epsilon greedy implementation? make optional?
@@ -135,15 +131,8 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             auto log_probabilities = torch::flatten(actor->forward(input));
             auto probabilities = torch::exp(log_probabilities);
 
-            int64_t choice;
-
-            if (dist(generator) == 1) {
-                choice = choice_dist(generator);
-            }
-            else {
-                // choice = torch::argmax(probabilities).item<int64_t>();
-                choice = torch::multinomial(probabilities, 1).item<int64_t>();
-            }
+            // choice = torch::argmax(probabilities).item<int64_t>();
+            int64_t choice = torch::multinomial(probabilities, 1).item<int64_t>();
 
             environment->step(choice);
 

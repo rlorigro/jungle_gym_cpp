@@ -67,7 +67,6 @@ inline void A3CAgent::load(const path& actor_path, const path& critic_path) {
 }
 
 
-// TODO: switch name to "hyperparams" to avoid confusion
 A3CAgent::A3CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic):
         actor(actor),
         critic(critic),
@@ -89,10 +88,8 @@ void A3CAgent::train(shared_ptr<const Environment> env){
         throw runtime_error("ERROR: Environment pointer is null");
     }
 
-    // Returns the maximum number of threads that may be used in a parallel region
+    // Returns the number of threads that torch is using
     int n_torch_threads = torch::get_num_threads();
-
-    // Sets the number of threads to be used in parallel region
     torch::set_num_threads(1);
 
     if (not hyperparams.silent) {

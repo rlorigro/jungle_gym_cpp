@@ -30,7 +30,11 @@ using namespace std::chrono;
 
 namespace JungleGym{
 
-
+/**
+ * A convenience wrapper for a vector of Tensors (typically module::parameters()), which applies a chunking scheme to
+ * the tensors, remembers what shape it computed for each, and retains a view for future use. Then, it can be reused
+ * to iterate over all chunks in a thread safe (mutex guarded) manner. Primarily for use in A3C style updates.
+ */
 class AsyncIterator{
     vector<Tensor> chunks;
 

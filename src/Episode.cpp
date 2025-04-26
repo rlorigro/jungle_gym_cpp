@@ -51,6 +51,17 @@ void TensorEpisode::clear() {
 }
 
 
+void TensorEpisode::compute_td_rewards(float gamma){
+    td_rewards = torch::zeros(rewards.sizes());
+
+    td_rewards[size-1] = rewards[size-1];
+
+    for (auto i=size-2; i >= 0; i--) {
+        td_rewards[i] = gamma*td_rewards[i+1]*mask[i+1] + rewards[i];
+    }
+}
+
+
 void Episode::clear(){
     log_action_distributions.clear();
     states.clear();
@@ -106,7 +117,7 @@ void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_pred
 
 
 void Episode::to_tensor(TensorEpisode& tensor_episode) {
-    tensor_episode.size = size;
+    tensor_episode.size = int64_t(size);
     tensor_episode.states = torch::stack(states);
     tensor_episode.log_action_distributions = torch::stack(log_action_distributions);
     tensor_episode.value_predictions = torch::stack(value_predictions);

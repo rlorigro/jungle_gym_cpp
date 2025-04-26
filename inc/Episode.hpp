@@ -20,7 +20,10 @@ using torch::Tensor;
 
 namespace JungleGym {
 
-
+/**
+ * Similar to Episode, but the time dimension is accounted for in the tensor, instead of using a vector. Intended for
+ * batched inference and training with importance sampling (e.g. in PPO)
+ */
 class TensorEpisode{
 public:
     // Warning: all vars defined here must be cleared in the Episode::clear() method!
@@ -33,9 +36,10 @@ public:
 
     // 1 by default, 0 on first step of new episodes. Used for PPO and recurrent policy implementations.
     Tensor mask;
-    size_t size;
+    int64_t size;
 
     void clear();
+    void compute_td_rewards(float gamma);
 
     TensorEpisode():size(0){};
 

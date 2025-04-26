@@ -21,8 +21,8 @@ class Environment{
 protected:
     torch::Tensor action_space;
     torch::Tensor observation_space;
-    float total_reward;
-    float reward;
+    float total_reward=0;
+    float reward=0;
     atomic<bool> terminated;
     atomic<bool> truncated;
     Environment();

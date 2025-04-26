@@ -47,7 +47,6 @@ public:
     inline void test(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
     inline void load(const path& actor_path, const path& critic_path);
-    inline double get_wait_time_s() const;
 };
 
 
@@ -117,6 +116,8 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
 
         float reward = environment->get_reward();
 
+        cerr << step_index << ',' << reward << ',' << is_reset << ',' << environment->is_terminated() << ',' << environment->is_truncated() << '\n';
+
         episode.update(input, log_probabilities, value_predict, choice, reward, is_reset);
 
         if (is_reset) {
@@ -124,6 +125,7 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
         }
 
         if (environment->is_terminated() or environment->is_truncated()) {
+            environment->reset();
             is_reset = true;
         }
     }
@@ -133,7 +135,7 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
 
 
 void PPOAgent::train(shared_ptr<const Environment> env){
-    train_cycle(env, hyperparams.n_threads*4);
+    train_cycle(env, hyperparams.n_threads*16);
 }
 
 
@@ -189,7 +191,14 @@ void PPOAgent::train_cycle(shared_ptr<const Environment> env, size_t n_steps){
     cerr << "value_predictions: " << episode.value_predictions.sizes() << '\n';
     cerr << "actions: " << episode.actions.sizes() << '\n';
     cerr << "rewards: " << episode.rewards.sizes() << '\n';
+    cerr << "td_rewards: " << episode.td_rewards.sizes() << '\n';
     cerr << "mask: " << episode.mask.sizes() << '\n';
+
+    episode.compute_td_rewards(hyperparams.gamma);
+    cerr << "mask: \n" << episode.mask << '\n';
+    cerr << "rewards: \n" << episode.rewards << '\n';
+    cerr << "td_rewards: \n" << episode.td_rewards << '\n';
+
 }
 
 
@@ -204,8 +213,6 @@ void PPOAgent::test(shared_ptr<const Environment> env){
     critic->eval();
 
     shared_ptr<Environment> environment = env->clone();
-
-    auto prev_action = environment->get_action_space();
 
     std::thread t(std::bind(&Environment::render, environment, false));
 

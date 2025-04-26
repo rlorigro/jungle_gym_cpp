@@ -241,50 +241,28 @@ SimpleConv::SimpleConv(int input_width, int input_height, int input_channels, in
 /**
  * Use the CBAM spatial/channel attention module (without pooling on spatial attention)
  * Use densenet architecture for conv layers
- * @param x input with shape [W,H,C], no batches needed for RL policy
- * @return y
+ * @param x_input input with shape [N,C,W,H]
+ * @return y with shape
  */
-Tensor SimpleConv::forward(Tensor x) {
-    // Shape munging into [C,W,H]
-    x = torch::permute(x,{2,0,1});
-
-    // Add batch dimension (assumed singleton for RL)
-    auto x_input = torch::unsqueeze(x,0);
-
+Tensor SimpleConv::forward(Tensor x_input) {
     // Initial convolutions
     auto x_conv1 = torch::gelu(conv1->forward(x_input));
-    x = torch::cat({x_input, x_conv1}, 1);
+    auto x = torch::cat({x_input, x_conv1}, 1);
 
     auto x_conv2 = torch::gelu(conv2->forward(x));
     x = torch::cat({x_input, x_conv1, x_conv2}, 1);
 
-    // auto x_conv3 = torch::gelu(conv3->forward(x));
-    // x = torch::cat({x_input, x_conv1, x_conv2, x_conv3}, 1);
-
     // cerr << x_input.sizes() << '\n';
     // cerr << x_conv1.sizes() << '\n';
     // cerr << x_conv2.sizes() << '\n';
-    // cerr << x_conv3.sizes() << '\n';
     // cerr << x.sizes() << '\n';
 
     // --- Attention mapping ---
     auto c = x*channel_map.forward(x);
     auto s = c*spatial_map.forward(c);
 
-    // Apply residually to avoid excessive clipping/filtering of features
+    // Apply residually (to avoid excessive clipping/filtering of features)
     x = x + s;
-
-    // --- Self attention ---
-    // int batch = x.size(0);
-    // int channels = x.size(1);
-    //
-    // auto attn_scores = torch::matmul(x.view({batch, channels, -1}).transpose(1,2),x.view({batch, channels, -1}));
-    //
-    // attn_scores = torch::softmax(attn_scores, -1);
-    //
-    // auto x_flat = x.view({batch, channels, -1}).transpose(1,2);  // Shape: [batch, H*W, channels]
-    //
-    // x = torch::matmul(attn_scores, x_flat).transpose(1,2).view(x.sizes());
 
     // --- Output/prediction layers ---
     x = torch::flatten(x, 1,-1);

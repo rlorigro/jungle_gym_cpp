@@ -97,8 +97,6 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
 
     Episode episode;
 
-    bool is_reset = true;
-
     while (step_index.fetch_add(1) < n_steps) {
         Tensor input = environment->get_observation_space();
         input += 0.0001;
@@ -115,18 +113,14 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
         environment->step(choice);
 
         float reward = environment->get_reward();
+        bool done = environment->is_terminated() or environment->is_truncated();
 
-        cerr << step_index << ',' << reward << ',' << is_reset << ',' << environment->is_terminated() << ',' << environment->is_truncated() << '\n';
+        cerr << step_index << ',' << reward << ',' << done << ',' << environment->is_terminated() << ',' << environment->is_truncated() << '\n';
 
-        episode.update(input, log_probabilities, value_predict, choice, reward, is_reset);
+        episode.update(input, log_probabilities, value_predict, choice, reward, done);
 
-        if (is_reset) {
-            is_reset = false;
-        }
-
-        if (environment->is_terminated() or environment->is_truncated()) {
+        if (done) {
             environment->reset();
-            is_reset = true;
         }
     }
 
@@ -198,6 +192,24 @@ void PPOAgent::train_cycle(shared_ptr<const Environment> env, size_t n_steps){
     cerr << "mask: \n" << episode.mask << '\n';
     cerr << "rewards: \n" << episode.rewards << '\n';
     cerr << "td_rewards: \n" << episode.td_rewards << '\n';
+
+    episode.for_each_batch(4, [&](TensorEpisode& batch){
+        cerr << "states: " << batch.states.sizes() << '\n';
+        cerr << "td_rewards: " << batch.td_rewards.sizes() << '\n';
+        cerr << "mask: " << batch.mask.sizes() << '\n';
+        cerr << "mask:\n" << batch.mask << '\n';
+
+        auto action_dists = actor->forward(batch.states);
+        batch.value_predictions = critic->forward(batch.states);
+
+        cerr << "action_dists: " << action_dists.sizes() << '\n';
+        cerr << "values: " << batch.value_predictions.sizes() << '\n';
+
+        auto critic_loss = batch.compute_critic_loss(true);
+        auto actor_loss = batch.compute_clip_loss(action_dists, 0.2, true);
+        auto entropy = batch.compute_entropy_loss(action_dists, true, true);
+    });
+
 
 }
 

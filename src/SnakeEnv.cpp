@@ -168,6 +168,10 @@ torch::Tensor SnakeEnv::get_observation_space() const {
     o += noise;
     o.clip_(0.0, 1.0);
 
+    // Conv layers expect [N,C,W,H]
+    o = o.permute({2,0,1});
+    o.unsqueeze_(0);
+
     return o;
 }
 
@@ -363,7 +367,7 @@ void SnakeEnv::render(bool interactive) {
     }
 
     // Create a window
-    SDL_Window* window = SDL_CreateWindow("SDL Squares", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    SDL_Window* window = SDL_CreateWindow("Snake", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                           SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
         std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
@@ -416,7 +420,11 @@ void SnakeEnv::render(bool interactive) {
         SDL_RenderClear(renderer);
 
         lock.lock();
-        auto o = get_observation_space();
+
+        // Fetch the observation space and convert to [W,H,C] aka [X,Y,Z] shape
+        auto o = get_observation_space().permute({0,2,3,1});
+        o.squeeze_(0);
+
         auto o_3d = o.accessor<float,3>();
         lock.unlock();
 

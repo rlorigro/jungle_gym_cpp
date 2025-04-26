@@ -57,8 +57,157 @@ void TensorEpisode::compute_td_rewards(float gamma){
     td_rewards[size-1] = rewards[size-1];
 
     for (auto i=size-2; i >= 0; i--) {
-        td_rewards[i] = gamma*td_rewards[i+1]*mask[i+1] + rewards[i];
+        td_rewards[i] = gamma*td_rewards[i+1]*(1-mask[i]) + rewards[i];
     }
+}
+
+
+void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(TensorEpisode& batch)>& f) {
+    int64_t n_batches = size / batch_size;
+    int64_t remainder = size % batch_size;
+
+    TensorEpisode e;
+    e.size = batch_size;
+
+    for (int64_t i=0; i<n_batches; i++) {
+        e.log_action_distributions = log_action_distributions.slice(0, i*batch_size, (i+1)*batch_size);
+        e.value_predictions = value_predictions.slice(0, i*batch_size, (i+1)*batch_size);
+        e.states = states.slice(0, i*batch_size, (i+1)*batch_size);
+        e.actions = actions.slice(0, i*batch_size, (i+1)*batch_size);
+        e.rewards = rewards.slice(0, i*batch_size, (i+1)*batch_size);
+        e.td_rewards = td_rewards.slice(0, i*batch_size, (i+1)*batch_size);
+        e.mask = mask.slice(0, i*batch_size, (i+1)*batch_size);
+
+        f(e);
+    }
+
+    if (remainder > 0) {
+        e.size = remainder;
+
+        e.log_action_distributions = log_action_distributions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.value_predictions = value_predictions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.states = states.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.actions = actions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.rewards = rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.td_rewards = td_rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.mask = mask.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+
+        f(e);
+    }
+}
+
+
+// Compute the stepwise entropy for each action distribution and return the sum or mean depending on `mean`
+Tensor TensorEpisode::compute_entropy_loss(bool mean, bool norm) const {
+    return compute_entropy_loss(log_action_distributions, mean, norm);
+}
+
+
+// Compute the stepwise entropy for each action distribution and return the sum or mean depending on `mean`
+Tensor TensorEpisode::compute_entropy_loss(const Tensor& log_action_probs, bool mean, bool norm) const{
+    // actions shape: [N,A] where A is the action space size, N is batch size
+    // Compute -Σ log(p(x_i))*p(x_i) for i in A
+    // NOTE: distributions are already in log space
+    auto entropy = torch::sum(torch::exp(log_action_probs)*log_action_probs, 1);
+
+    if (norm){
+        // The maximum possible entropy is log(1/A) where A is the size of the action distribution because
+        // when the dist is uniform p(x) = 1/A
+        auto A = float(log_action_probs.sizes()[1]);
+        auto denom = torch::log(torch::tensor(A));
+
+        // Keep the value negative so that we don't accidentally flip the optimization direction
+        entropy = -entropy/denom;
+    }
+
+    if (mean) {
+        entropy = torch::mean(entropy);
+    }
+    else {
+        entropy = torch::sum(entropy);
+    }
+
+    return -entropy;
+}
+
+
+// Use the action history and reward history to compute stepwise loss, discounted with decay rate gamma.
+// Return the sum or mean depending on `mean`
+Tensor TensorEpisode::compute_td_loss(bool mean, bool advantage) const{
+    if (not td_rewards.defined()) {
+        throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
+    }
+
+    auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32));
+
+    // Shapes:
+    // action_distributions  [N,A]
+    // actions               [N]    (indexes of chosen actions)
+    // td_rewards            [N]
+    // value_predicitions    [N]
+
+    auto action_log_probs = log_action_distributions.gather(1, actions.unsqueeze(1));
+
+    if (advantage){
+        // If using advantage, we want to train the model to maximize the "advantage" over the expected value
+        // of the next state, i.e. Q(s_t, a_t) - V(s_t)
+        loss = torch::sum(action_log_probs*(td_rewards - value_predictions));
+    }
+    else{
+        loss = torch::sum(action_log_probs*td_rewards);
+    }
+
+    if (mean){
+        loss = loss / size;
+    }
+
+    return -loss;
+}
+
+
+Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float eps, bool mean) const{
+    if (not td_rewards.defined()) {
+        throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
+    }
+
+    // Shapes:
+    // action_distributions  [N,A]
+    // actions               [N]    (indexes of chosen actions)
+    // td_rewards            [N]
+    // value_predicitions    [N]
+
+    auto p_old = torch::exp(log_action_distributions.gather(1, actions.unsqueeze(1)));
+    auto p_new = torch::exp(log_action_probs_new.gather(1, actions.unsqueeze(1)));
+    auto a = td_rewards - value_predictions;
+
+    auto r = p_new / p_old;
+    auto r_clip = torch::clip(r, 1-eps, 1+eps);
+
+    auto loss = torch::min(r*a, r_clip*a);
+
+    if (mean){
+        loss = loss.mean();
+    }
+
+    return -loss;
+}
+
+
+// This corresponds to the MSE of the discounted reward vs predicted value, for each step in retrospect.
+// Return the sum or mean depending on `mean`
+Tensor TensorEpisode::compute_critic_loss(bool mean) const{
+    if (not td_rewards.defined()) {
+        throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
+    }
+
+    auto loss = torch::sum(torch::pow(td_rewards - value_predictions, 2) / 2);
+
+    // If requested, average the loss
+    if (mean) {
+        loss = loss / size;
+    }
+
+    return loss;
 }
 
 
@@ -105,23 +254,23 @@ void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t
 }
 
 
-void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_prediction, int64_t action_index, float reward, bool is_reset){
+void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_prediction, int64_t action_index, float reward, bool done){
     states.emplace_back(state);
     log_action_distributions.emplace_back(log_action_probs);
     value_predictions.emplace_back(value_prediction);
     actions.emplace_back(action_index);
     rewards.emplace_back(reward);
-    mask.emplace_back(!is_reset);
+    mask.emplace_back(done);
     size++;
 }
 
 
 void Episode::to_tensor(TensorEpisode& tensor_episode) {
     tensor_episode.size = int64_t(size);
-    tensor_episode.states = torch::stack(states);
+    tensor_episode.states = torch::cat(states, 0);
     tensor_episode.log_action_distributions = torch::stack(log_action_distributions);
-    tensor_episode.value_predictions = torch::stack(value_predictions);
-    tensor_episode.actions = torch::tensor(actions, torch::kInt32);
+    tensor_episode.value_predictions = torch::cat(value_predictions, 0);
+    tensor_episode.actions = torch::tensor(actions, torch::kInt64);
     tensor_episode.rewards = torch::tensor(rewards, torch::kFloat);
     tensor_episode.mask = torch::tensor(mask, torch::kInt8);
 }
@@ -138,7 +287,7 @@ Tensor Episode::compute_entropy(const Tensor& log_distribution, bool norm) const
         // The maximum possible entropy is log(1/A) where A is the size of the action distribution because
         // when the dist is uniform p(x) = 1/A
         auto A = float(log_distribution.sizes()[0]);
-        auto denom = torch::log(torch::tensor(1.0f/A));
+        auto denom = torch::log(torch::tensor(A));
 
         // Keep the value negative so that we don't accidentally flip the optimization direction
         entropy = -entropy/denom;

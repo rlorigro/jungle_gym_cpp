@@ -23,10 +23,10 @@ class PGAgent {
     shared_ptr<Model> actor;
     Episode episode;
     torch::optim::RMSprop optimizer;
-    Hyperparameters params;
+    Hyperparameters hyperparams;
 
 public:
-    inline PGAgent(const Hyperparameters& params, shared_ptr<Model> actor);
+    inline PGAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor);
     inline void train(shared_ptr<const Environment> env);
     inline void test(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
@@ -51,11 +51,11 @@ inline void PGAgent::load(const path& actor_path) {
 }
 
 
-PGAgent::PGAgent(const Hyperparameters& params, shared_ptr<Model> actor):
+PGAgent::PGAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor):
         actor(actor),
         episode(),
-        optimizer(actor->parameters(), torch::optim::RMSpropOptions(params.learn_rate)),
-        params(params)
+        optimizer(actor->parameters(), torch::optim::RMSpropOptions(hyperparams.learn_rate)),
+        hyperparams(hyperparams)
 {
     if (!actor) {
         throw std::runtime_error("ERROR: actor pointer is null");
@@ -85,19 +85,19 @@ void PGAgent::train(shared_ptr<const Environment> env){
     // log_b(x) = log_e(x)/log_e(b)
     float eps_norm = log(0.01)/log(0.99);
 
-    if (not params.silent) {
+    if (not hyperparams.silent) {
         cerr << "Using eps_norm: " << eps_norm << " for eps_terminal: " << eps_terminal << '\n';
     }
 
-    while (e < params.n_episodes) {
+    while (e < hyperparams.n_episodes) {
         environment->reset();
         episode.clear();
 
         // exponential decay that terminates at ~0.01
-        // epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(size_t(eps_norm))));
+        // epsilon = pow(0.99,(float(e)/float(hyperparams.n_episodes)) * float(size_t(eps_norm))));
         std::bernoulli_distribution dist(epsilon);
 
-        for (size_t s=0; s<params.episode_length; s++) {
+        for (size_t s=0; s<hyperparams.episode_length; s++) {
 
             Tensor input = environment->get_observation_space();
             input += 0.0001;
@@ -134,24 +134,24 @@ void PGAgent::train(shared_ptr<const Environment> env){
 
         e++;
 
-        auto td_loss = episode.compute_td_loss(params.gamma, false, false);
+        auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, false);
         auto entropy_loss = episode.compute_entropy_loss(false, false);
 
-        if (not params.silent) {
+        if (not hyperparams.silent) {
             // Print some stats, increment loss using episode, update model if batch_size accumulated
             cerr << std::left
             << std::setw(8) << "episode" << std::setw(8) << e
             << std::setw(8) << "length" << std::setw(6) << episode.get_size()
-            << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*params.lambda
+            << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
             << std::setw(8) << "td_loss " << std::setw(12) << td_loss.item<float>()
             << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
         }
 
-        auto loss = td_loss - params.lambda*entropy_loss;
+        auto loss = td_loss + hyperparams.lambda*entropy_loss;
         loss.backward();
 
         // Occasionally apply the accumulated gradient to the model
-        if (e % params.batch_size == 0){
+        if (e % hyperparams.batch_size == 0){
             optimizer.step();
             optimizer.zero_grad();
         }
@@ -171,10 +171,10 @@ void PGAgent::test(shared_ptr<const Environment> env){
     size_t e = 0;
     std::thread t(std::bind(&Environment::render, environment, false));
 
-    while (e < params.n_episodes) {
+    while (e < hyperparams.n_episodes) {
         environment->reset();
 
-        for (size_t s=0; s<params.episode_length; s++) {
+        for (size_t s=0; s<hyperparams.episode_length; s++) {
             auto input = environment->get_observation_space();
             input += 0.0001;
 

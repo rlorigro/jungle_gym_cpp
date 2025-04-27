@@ -163,6 +163,9 @@ void PGAgent::test(shared_ptr<const Environment> env){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
+    torch::NoGradGuard no_grad;
+
+    actor->eval();
 
     shared_ptr<Environment> environment = env->clone();
 

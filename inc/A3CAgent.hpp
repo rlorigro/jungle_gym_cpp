@@ -153,6 +153,8 @@ void A3CAgent::test(shared_ptr<const Environment> env){
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
 
+    torch::NoGradGuard no_grad;
+
     actor->eval();
     critic->eval();
 

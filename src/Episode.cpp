@@ -284,13 +284,12 @@ Tensor Episode::compute_entropy(const Tensor& log_distribution, bool norm) const
     }
 
     if (norm){
-        // The maximum possible entropy is log(1/A) where A is the size of the action distribution because
+        // The maximum possible entropy is -log(1/A) or log(A) where A is the size of the action distribution because
         // when the dist is uniform p(x) = 1/A
         auto A = float(log_distribution.sizes()[0]);
         auto denom = torch::log(torch::tensor(A));
 
-        // Keep the value negative so that we don't accidentally flip the optimization direction
-        entropy = -entropy/denom;
+        entropy = entropy/denom;
     }
 
     return entropy;
@@ -311,7 +310,7 @@ Tensor Episode::compute_entropy_loss(bool mean, bool norm) const{
         entropy_loss = entropy_loss / log_action_distributions.size();
     }
 
-    return entropy_loss;
+    return -entropy_loss;
 }
 
 

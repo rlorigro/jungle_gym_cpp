@@ -151,7 +151,7 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
         auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, true, environment->is_terminated());
         auto entropy_loss = episode.compute_entropy_loss(false, true);
 
-        auto actor_loss = td_loss - hyperparams.lambda*entropy_loss;
+        auto actor_loss = td_loss + hyperparams.lambda*entropy_loss;
         auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, false, environment->is_terminated());
 
         if (not hyperparams.silent and e % 10 == 0) {
@@ -162,7 +162,7 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             << std::setw(7) << e
             << std::setw(4) << episode.get_size()
             << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
-            << std::setw(8) << "entropy" << std::setw(12) << entropy_loss.item<float>()/float(episode.get_size())
+            << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()/float(episode.get_size())
             << std::setw(5) << "l_td " << std::setw(12) << td_loss.item<float>()
             << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()
             << std::setw(10) << "reward_ep" << std::setw(10) << total_reward
@@ -185,7 +185,6 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
         e++;
 
         // Periodically apply the accumulated gradient to the model
-        // if (e % std::max(params.batch_size/2,size_t(1)) == 0){
         if (e % hyperparams.batch_size == 0){
             optimizer_critic.step();
             optimizer_critic.zero_grad();
@@ -204,6 +203,11 @@ void A2CAgent::test(shared_ptr<const Environment> env){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
+
+    torch::NoGradGuard no_grad;
+
+    actor->eval();
+    critic->eval();
 
     shared_ptr<Environment> environment = env->clone();
 

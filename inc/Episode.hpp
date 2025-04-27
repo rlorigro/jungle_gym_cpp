@@ -42,7 +42,7 @@ public:
 
     void clear();
     void compute_td_rewards(float gamma);
-    void for_each_batch(int64_t batch_size, const function<void(TensorEpisode& batch)>& f);
+    void for_each_batch(int64_t batch_size, const function<void(TensorEpisode& batch)>& f) const;
 
     TensorEpisode():size(0){};
 

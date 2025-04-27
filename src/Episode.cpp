@@ -62,7 +62,7 @@ void TensorEpisode::compute_td_rewards(float gamma){
 }
 
 
-void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(TensorEpisode& batch)>& f) {
+void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(TensorEpisode& batch)>& f) const {
     int64_t n_batches = size / batch_size;
     int64_t remainder = size % batch_size;
 
@@ -108,25 +108,26 @@ Tensor TensorEpisode::compute_entropy_loss(const Tensor& log_action_probs, bool 
     // actions shape: [N,A] where A is the action space size, N is batch size
     // Compute -Σ log(p(x_i))*p(x_i) for i in A
     // NOTE: distributions are already in log space
-    auto entropy = torch::sum(torch::exp(log_action_probs)*log_action_probs, 1);
+    auto entropy = -torch::sum(torch::exp(log_action_probs)*log_action_probs, 1);
 
     if (norm){
-        // The maximum possible entropy is log(1/A) where A is the size of the action distribution because
+        // The maximum possible entropy is -log(1/A) or log(A) where A is the size of the action distribution because
         // when the dist is uniform p(x) = 1/A
         auto A = float(log_action_probs.sizes()[1]);
         auto denom = torch::log(torch::tensor(A));
 
         // Keep the value negative so that we don't accidentally flip the optimization direction
-        entropy = -entropy/denom;
+        entropy = entropy/denom;
     }
 
     if (mean) {
-        entropy = torch::mean(entropy);
+        entropy = entropy.mean();
     }
     else {
-        entropy = torch::sum(entropy);
+        entropy = entropy.sum();
     }
 
+    // Negate because this is "loss" and minimizing the negative term is maximizing entropy
     return -entropy;
 }
 
@@ -151,7 +152,9 @@ Tensor TensorEpisode::compute_td_loss(bool mean, bool advantage) const{
     if (advantage){
         // If using advantage, we want to train the model to maximize the "advantage" over the expected value
         // of the next state, i.e. Q(s_t, a_t) - V(s_t)
-        loss = torch::sum(action_log_probs*(td_rewards - value_predictions));
+
+        // Don't want to backprop through the critic so we detach
+        loss = torch::sum(action_log_probs*(td_rewards - value_predictions.detach()));
     }
     else{
         loss = torch::sum(action_log_probs*td_rewards);
@@ -176,9 +179,11 @@ Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float eps,
     // td_rewards            [N]
     // value_predicitions    [N]
 
-    auto p_old = torch::exp(log_action_distributions.gather(1, actions.unsqueeze(1)));
+    auto p_old = torch::exp(log_action_distributions.detach().gather(1, actions.unsqueeze(1)));
     auto p_new = torch::exp(log_action_probs_new.gather(1, actions.unsqueeze(1)));
-    auto a = td_rewards - value_predictions;
+
+    // Advantage estimate. Don't want to backprop through the critic so we detach
+    auto a = td_rewards - value_predictions.detach();
 
     auto r = p_new / p_old;
     auto r_clip = torch::clip(r, 1-eps, 1+eps);
@@ -187,6 +192,9 @@ Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float eps,
 
     if (mean){
         loss = loss.mean();
+    }
+    else {
+        loss = loss.sum();
     }
 
     return -loss;

@@ -125,7 +125,7 @@ void PGAgent::train(shared_ptr<const Environment> env){
 
             float reward = environment->get_reward();
 
-            episode.update(log_probabilities, choice, reward);
+            episode.update(log_probabilities, choice, reward, environment->is_terminated(), environment->is_truncated());
 
             if (environment->is_terminated() or environment->is_truncated()) {
                 break;

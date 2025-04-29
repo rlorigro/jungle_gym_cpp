@@ -41,8 +41,8 @@ class PPOAgent {
 
 public:
     inline PPOAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
-    inline void sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<const Environment> env, atomic<size_t>& n_steps, size_t max_steps);
-    inline void train_cycle(shared_ptr<const Environment> env, size_t n_steps);
+    inline void sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Environment> env, atomic<size_t>& n_steps, size_t max_steps);
+    inline void train_cycle(vector<shared_ptr<Environment>>& envs, size_t n_steps);
     inline void train(shared_ptr<const Environment> env);
     inline void cache_params();
     inline void test(shared_ptr<const Environment> env);
@@ -115,8 +115,8 @@ void PPOAgent::cache_params() {
 }
 
 
-void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<const Environment> env, atomic<size_t>& step_index, size_t n_steps){
-    if (!env) {
+void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Environment> environment, atomic<size_t>& step_index, size_t n_steps){
+    if (!environment) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
 
@@ -124,15 +124,14 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
 
     cache_params();
 
-    // make a copy of the environment
-    shared_ptr<Environment> environment = env->clone();
-    environment->reset();
-
     Episode episode;
+    bool terminated;
+    bool truncated;
 
-    while (step_index.fetch_add(1) < n_steps) {
+    int64_t n_truncated = 0;
+
+    while (step_index.fetch_add(1) < n_steps + n_truncated) {
         Tensor input = environment->get_observation_space();
-        input += 0.0001;
 
         // Get value prediction (singleton tensor)
         auto value_predict = torch::flatten(critic_old->forward(input));
@@ -146,33 +145,43 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<con
         environment->step(choice);
 
         float reward = environment->get_reward();
-        bool done = environment->is_terminated() or environment->is_truncated();
+        terminated = environment->is_terminated();
+        truncated = environment->is_truncated();
 
-        // if (not hyperparams.silent and step_index % 50 == 0) {
-        //     cerr << std::setprecision(3) << std::left
-        //     << std::setw(8) << step_index
-        //     << std::setw(8) << reward
-        //     << std::setw(8) << done << '\n';
-        // }
+        // If truncated, this won't actually append the state/action/etc, just update truncated vector of values
+        episode.update(input, log_probabilities, value_predict, choice, reward, terminated, truncated);
 
-        episode.update(input, log_probabilities, value_predict, choice, reward, done);
+        // Since truncations don't append observations, we add some padding every time one is encountered (usually rare)
+        n_truncated += int64_t(truncated);
 
-        if (done) {
+        if (truncated or terminated) {
             environment->reset();
         }
     }
+
+    // When sampling episodes, we pause for training, but training (GAE etc) needs a T+1 value estimate
+    Tensor input = environment->get_observation_space();
+    auto value_predict = torch::flatten(critic_old->forward(input));
+    episode.update_truncated(value_predict);
 
     episode.to_tensor(tensor_episode);
 }
 
 
 void PPOAgent::train(shared_ptr<const Environment> env){
-    size_t n_steps_total = 1'000'000;
-    size_t cycle_length = 2048;
+    size_t n_steps_total = hyperparams.n_steps;
+    size_t cycle_length = hyperparams.n_steps_per_cycle;
     size_t n_cycles = n_steps_total/cycle_length;
 
+    // Initialize environments in bulk, upfront because their true episode length may be longer than the sampling length
+    vector<shared_ptr<Environment> > envs;
+
+    for (size_t i=0; i<hyperparams.n_threads; i++) {
+        envs.emplace_back(env->clone());
+    }
+
     for (size_t i=0; i<n_cycles; i++) {
-        train_cycle(env, cycle_length);
+        train_cycle(envs, cycle_length);
         cerr << 100.0*float(i+1)/float(n_cycles) << "%" << '\n';
     }
 }
@@ -187,9 +196,9 @@ void PPOAgent::train(shared_ptr<const Environment> env){
 * - Aggregate trajectories into contiguous Tensors and compute TD reward
 * - Perform batched training over the trajectories for K epochs
 */
-void PPOAgent::train_cycle(shared_ptr<const Environment> env, size_t n_steps){
-    if (!env) {
-        throw runtime_error("ERROR: Environment pointer is null");
+void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_steps){
+    if (envs.size() < hyperparams.n_threads) {
+        throw runtime_error("ERROR: provided envs " + std::to_string(envs.size()) + " insufficient for n_threads "  + std::to_string(hyperparams.n_threads));
     }
 
     // Temporarily set torch MP threads to 1, so that trajectory sampling can be vanilla multithreaded
@@ -199,8 +208,12 @@ void PPOAgent::train_cycle(shared_ptr<const Environment> env, size_t n_steps){
 
     vector<thread> threads;
     for (size_t i=0; i<hyperparams.n_threads; i++) {
+        if (!envs[i]) {
+            throw runtime_error("ERROR: Environment pointer is null");
+        }
+
         episodes[i].clear();
-        threads.emplace_back(&PPOAgent::sample_trajectories, this, std::ref(episodes[i]), env, std::ref(step_index), n_steps);
+        threads.emplace_back(&PPOAgent::sample_trajectories, this, std::ref(episodes[i]), envs[i], std::ref(step_index), n_steps);
     }
 
     for (auto& t: threads) {
@@ -212,11 +225,11 @@ void PPOAgent::train_cycle(shared_ptr<const Environment> env, size_t n_steps){
 
     TensorEpisode episode(episodes);
 
-    auto n_terminations = torch::sum(episode.mask).item<int64_t>();
+    auto n_episodes = torch::sum(episode.terminated).item<int64_t>() + torch::count_nonzero(episode.truncation_values).item<int64_t>();
     auto total_reward = torch::sum(episode.rewards).item<float>();
 
-    cerr << "avg episode reward: " << total_reward / float(n_terminations) << '\n';
-    cerr << "avg episode length: " << float(episode.size) / float(n_terminations) << '\n';
+    cerr << "avg episode reward: " << total_reward / float(n_episodes) << '\n';
+    cerr << "avg episode length: " << float(episode.size) / float(n_episodes) << '\n';
 
     // cerr << "log_action_distributions: " << episode.log_action_distributions.sizes() << '\n';
     // cerr << "states: " << episode.states.sizes() << '\n';
@@ -228,15 +241,15 @@ void PPOAgent::train_cycle(shared_ptr<const Environment> env, size_t n_steps){
 
     episode.compute_td_rewards(hyperparams.gamma);
 
-    for (size_t i=0; i<3; i++) {
+    for (size_t i=0; i<hyperparams.n_epochs; i++) {
         int64_t b = 0;
 
         episode.for_each_batch(hyperparams.batch_size, [&](TensorEpisode& batch){
             auto action_dists = actor->forward(batch.states);
-            batch.value_predictions = critic->forward(batch.states);
+            batch.value_predictions = critic->forward(batch.states).squeeze();
 
             auto critic_loss = batch.compute_critic_loss(false);
-            auto clip_loss = batch.compute_clip_loss(action_dists, 0.2, false);
+            auto clip_loss = batch.compute_clip_loss(action_dists, 0.95, hyperparams.gamma, 0.2, false);
             auto entropy_loss = batch.compute_entropy_loss(action_dists, false, true);
 
             // if (not hyperparams.silent) {

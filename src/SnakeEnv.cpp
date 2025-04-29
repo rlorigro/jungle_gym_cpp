@@ -21,6 +21,7 @@ using std::cerr;
 using torch::slice;
 using namespace torch::indexing;
 
+
 namespace JungleGym{
 
 SnakeEnv::SnakeEnv(int64_t width, int64_t height):
@@ -57,7 +58,6 @@ void SnakeEnv::reset() {
 
     observation_space *= 0;
     fill_wall();
-    generator = mt19937(random_device()());
     terminated = false;
     truncated = false;
     reward = 0;
@@ -147,7 +147,7 @@ torch::Tensor SnakeEnv::get_observation_space() const {
     auto o = observation_space.clone();
 
     float a = 1.0;
-    float b = 0.1;
+    float b = 0.5;
     float delta = (a-b) / float(snake.size() - 2);
 
     size_t i = 0;
@@ -171,6 +171,8 @@ torch::Tensor SnakeEnv::get_observation_space() const {
     // Conv layers expect [N,C,W,H]
     o = o.permute({2,0,1});
     o.unsqueeze_(0);
+
+    o -= OFFSET;
 
     return o;
 }
@@ -424,6 +426,7 @@ void SnakeEnv::render(bool interactive) {
         // Fetch the observation space and convert to [W,H,C] aka [X,Y,Z] shape
         auto o = get_observation_space().permute({0,2,3,1});
         o.squeeze_(0);
+        o += OFFSET;
 
         auto o_3d = o.accessor<float,3>();
         lock.unlock();

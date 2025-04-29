@@ -22,7 +22,8 @@ TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
     vector<Tensor> value_predictions_temp;
     vector<Tensor> actions_temp;
     vector<Tensor> rewards_temp;
-    vector<Tensor> mask_temp;
+    vector<Tensor> terminated_temp;
+    vector<Tensor> truncated_temp;
     vector<Tensor> size_temp;
 
     // This is only a shallow copy, in preparation for torch::cat(vector<Tensor>& t), which is a deep copy
@@ -32,7 +33,9 @@ TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
         value_predictions_temp.emplace_back(episode.value_predictions);
         actions_temp.emplace_back(episode.actions);
         rewards_temp.emplace_back(episode.rewards);
-        mask_temp.emplace_back(episode.mask);
+        terminated_temp.emplace_back(episode.terminated);
+        truncated_temp.emplace_back(episode.truncation_values);
+
         size += episode.size;
     }
 
@@ -41,7 +44,8 @@ TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
     value_predictions = torch::cat(value_predictions_temp);
     actions = torch::cat(actions_temp);
     rewards = torch::cat(rewards_temp);
-    mask = torch::cat(mask_temp);
+    terminated = torch::cat(terminated_temp);
+    truncation_values = torch::cat(truncated_temp);
 }
 
 
@@ -51,13 +55,20 @@ void TensorEpisode::clear() {
 }
 
 
-void TensorEpisode::compute_td_rewards(float gamma){
-    td_rewards = torch::zeros(rewards.sizes());
+void TensorEpisode::compute_td_rewards(float gamma) {
+    td_rewards = torch::zeros(rewards.sizes(), rewards.options());
 
-    td_rewards[size-1] = rewards[size-1];
-
-    for (auto i=size-2; i >= 0; i--) {
-        td_rewards[i] = gamma*td_rewards[i+1]*(1-mask[i]) + rewards[i];
+    for (int64_t t = size-1; t>=0; t--) {
+        if (terminated[t].item<bool>()) {
+            // Terminal state: no bootstrap
+            td_rewards[t] = rewards[t];
+        } else if (truncation_values[t].item<bool>()) {
+            // Truncated state: bootstrap using cached t+1 value prediction
+            td_rewards[t] = rewards[t] + gamma * truncation_values[t];
+        } else {
+            // Normal case: bootstrap from next step's td return
+            td_rewards[t] = rewards[t] + gamma * td_rewards[t + 1];
+        }
     }
 }
 
@@ -76,7 +87,8 @@ void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(Tenso
         e.actions = actions.slice(0, i*batch_size, (i+1)*batch_size);
         e.rewards = rewards.slice(0, i*batch_size, (i+1)*batch_size);
         e.td_rewards = td_rewards.slice(0, i*batch_size, (i+1)*batch_size);
-        e.mask = mask.slice(0, i*batch_size, (i+1)*batch_size);
+        e.terminated = terminated.slice(0, i*batch_size, (i+1)*batch_size);
+        e.truncation_values = truncation_values.slice(0, i*batch_size, (i+1)*batch_size);
 
         f(e);
     }
@@ -90,7 +102,8 @@ void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(Tenso
         e.actions = actions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
         e.rewards = rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
         e.td_rewards = td_rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.mask = mask.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.terminated = terminated.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        e.truncation_values = truncation_values.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
 
         f(e);
     }
@@ -168,7 +181,31 @@ Tensor TensorEpisode::compute_td_loss(bool mean, bool advantage) const{
 }
 
 
-Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float eps, bool mean) const{
+Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
+    Tensor advantages = torch::zeros({size}, rewards.options()).squeeze();
+    Tensor last_advantage = torch::zeros({}, rewards.options());
+
+    // terminated is kInt8, shape [N]
+    for (int t = size-1; t >= 0; t--) {
+        Tensor next_value;
+
+        if (t == size-1) {
+            // Is zero if non-truncated, cached T+1 value otherwise
+            next_value = truncation_values[t];
+        } else {
+            next_value = value_predictions[t+1];
+        }
+
+        Tensor delta = rewards[t] + gamma * next_value * terminated[t] - value_predictions[t];
+        advantages[t] = delta + gamma * lambda * terminated[t] * last_advantage;
+        last_advantage = advantages[t];
+    }
+
+    return advantages.detach();
+}
+
+
+Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float gae_lambda, float gae_gamma, float eps, bool mean) const{
     if (not td_rewards.defined()) {
         throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
     }
@@ -182,8 +219,8 @@ Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float eps,
     auto p_old = torch::exp(log_action_distributions.detach().gather(1, actions.unsqueeze(1)));
     auto p_new = torch::exp(log_action_probs_new.gather(1, actions.unsqueeze(1)));
 
-    // Advantage estimate. Don't want to backprop through the critic so we detach
-    auto a = td_rewards - value_predictions.detach();
+    // Advantage estimate. Don't want to backprop through the critic so it is detached (see compute_GAE method)
+    auto a = compute_GAE(gae_gamma, gae_lambda);
 
     auto r = p_new / p_old;
     auto r_clip = torch::clip(r, 1-eps, 1+eps);
@@ -225,7 +262,8 @@ void Episode::clear(){
     value_predictions.clear();
     actions.clear();
     rewards.clear();
-    mask.clear();
+    terminated.clear();
+    truncation_values.clear();
     size = 0;
 }
 
@@ -245,31 +283,57 @@ float Episode::get_total_reward() const {
 }
 
 
-void Episode::update(Tensor& log_action_probs, int64_t action_index, float reward){
-    log_action_distributions.emplace_back(log_action_probs);
-    actions.emplace_back(action_index);
-    rewards.emplace_back(reward);
-    size++;
+void Episode::update(Tensor& log_action_probs, int64_t action_index, float reward, bool is_terminated, bool is_truncated){
+    if (not is_truncated) {
+        log_action_distributions.emplace_back(log_action_probs);
+        actions.emplace_back(action_index);
+        rewards.emplace_back(reward);
+        terminated.emplace_back(is_terminated);
+        truncation_values.emplace_back(torch::zeros({1}));
+        size++;
+    }
 }
 
 
-void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t action_index, float reward){
-    log_action_distributions.emplace_back(log_action_probs);
-    value_predictions.emplace_back(value_prediction);
-    actions.emplace_back(action_index);
-    rewards.emplace_back(reward);
-    size++;
+void Episode::update(Tensor& state, Tensor& log_action_probs, int64_t action_index, float reward, bool is_terminated, bool is_truncated){
+    if (not is_truncated) {
+        states.emplace_back(state);
+        log_action_distributions.emplace_back(log_action_probs);
+        actions.emplace_back(action_index);
+        rewards.emplace_back(reward);
+        terminated.emplace_back(is_terminated);
+        truncation_values.emplace_back(torch::zeros({1}));
+        size++;
+    }
 }
 
 
-void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_prediction, int64_t action_index, float reward, bool done){
-    states.emplace_back(state);
-    log_action_distributions.emplace_back(log_action_probs);
-    value_predictions.emplace_back(value_prediction);
-    actions.emplace_back(action_index);
-    rewards.emplace_back(reward);
-    mask.emplace_back(done);
-    size++;
+void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_prediction, int64_t action_index, float reward, bool is_terminated, bool is_truncated){
+    if (not is_truncated) {
+        states.emplace_back(state);
+        log_action_distributions.emplace_back(log_action_probs);
+        value_predictions.emplace_back(value_prediction.view({1}));
+        actions.emplace_back(action_index);
+        rewards.emplace_back(reward);
+        terminated.emplace_back(is_terminated);
+        truncation_values.emplace_back(torch::zeros({1}));
+        size++;
+    }
+    else {
+        // Don't include the state that was truncated, but store the value in the previous index in case needed for the
+        // GAE estimate or similar, which expects a t+1 estimate
+
+        // For cases where we receive the truncated signal, usually the exact boundary is arbitrary
+        // so we just pretend this state wasn't visited and update the values
+        truncation_values.back() = value_prediction;
+    }
+}
+
+
+void Episode::update_truncated(Tensor& value_prediction){
+    // Don't include the state that was truncated, but store the value in the previous index in case needed for the
+    // GAE estimate or similar, which expects a t+1 estimate
+    truncation_values.back() = value_prediction;
 }
 
 
@@ -280,7 +344,9 @@ void Episode::to_tensor(TensorEpisode& tensor_episode) {
     tensor_episode.value_predictions = torch::cat(value_predictions, 0);
     tensor_episode.actions = torch::tensor(actions, torch::kInt64);
     tensor_episode.rewards = torch::tensor(rewards, torch::kFloat);
-    tensor_episode.mask = torch::tensor(mask, torch::kInt8);
+    tensor_episode.terminated = torch::tensor(terminated, torch::kInt8);
+    tensor_episode.truncation_values = torch::cat(truncation_values, 0);
+
 }
 
 
@@ -322,7 +388,7 @@ Tensor Episode::compute_entropy_loss(bool mean, bool norm) const{
 }
 
 
-Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool terminal) const{
+Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage) const{
     if (gamma < 0 or gamma >= 1){
         throw runtime_error("ERROR: gamma must be in range [0,1)");
     }
@@ -331,31 +397,29 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
     if (rewards.size() != log_action_distributions.size()){
         throw runtime_error("ERROR: cannot compute loss for episode with unequal reward/action lengths");
     }
-    // Check that sizes are equal
     if (advantage and rewards.size() != value_predictions.size()){
         throw runtime_error("ERROR: cannot compute loss with advantage for episode with unequal reward/value lengths");
     }
-
-    float r_prev = 0;
-
-    // If non-terminal episode, then simply approximate the future reward with the last value function,
-    // and do not use last step for training
-    if (not terminal and advantage) {
-        if (value_predictions.empty()) {
-            throw runtime_error("ERROR: cannot compute advantage loss for non-terminal episode without value predictions");
-        }
-        r_prev = value_predictions.back().item<float>();
+    if (terminated.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute loss for episode with unequal terminated/value lengths");
     }
-
-    auto stop = int64_t(rewards.size() - terminal);
-    auto start = 0;
+    if (advantage and truncation_values.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute loss with advantage for episode with unequal truncation_values/value lengths");
+    }
 
     vector<float> td_rewards = rewards;
 
-    // Reverse iterate and apply recurrence relation with gamma
-    for(int64_t i=stop-1; i>=start; i--){
-        td_rewards[i] = td_rewards[i] + gamma*r_prev;
-        r_prev = td_rewards[i];
+    for (int64_t t = size-1; t>=0; t--) {
+        if (terminated[t]) {
+            // Terminal state: no bootstrap
+            td_rewards[t] = rewards[t];
+        } else if (truncation_values[t].item<bool>()) {
+            // Truncated state: bootstrap using cached t+1 value prediction
+            td_rewards[t] = rewards[t] + gamma * truncation_values[t].item<float>();
+        } else {
+            // Normal case: bootstrap from next step's td return
+            td_rewards[t] = rewards[t] + gamma * td_rewards[t + 1];
+        }
     }
 
     auto loss = torch::tensor(0, torch::dtype(torch::kFloat32));
@@ -379,7 +443,7 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
     //
     // NOTE: log probs are negative by default so we subtract because the optimizer step is taken in the direction
     // that MINIMIZES loss.
-    for (size_t i=start; i<stop; i++){
+    for (size_t i=0; i<size; i++){
         if (advantage){
             // If using advantage, we want to train the model to maximize the "advantage" over the expected value
             // of the next state, i.e. Q(s_t, a_t) - V(s_t), both normalizing the reward and encouraging choices
@@ -402,7 +466,7 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage, bool ter
 }
 
 
-Tensor Episode::compute_critic_loss(float gamma, bool mean, bool terminal) const{
+Tensor Episode::compute_critic_loss(float gamma, bool mean) const{
     if (gamma < 0 or gamma >= 1){
         throw runtime_error("ERROR: gamma must be in range [0,1)");
     }
@@ -411,34 +475,36 @@ Tensor Episode::compute_critic_loss(float gamma, bool mean, bool terminal) const
     if (rewards.size() != value_predictions.size()){
         throw runtime_error("ERROR: cannot compute critic loss for episode with unequal reward/value_predictions lengths");
     }
-
-    float r_prev = 0;
-
-    // If non-terminal episode, then simply approximate the future reward with the last value function,
-    // and do not use last step for training
-    if (not terminal) {
-        if (rewards.empty()) {
-            throw runtime_error("ERROR: cannot compute advantage loss for non-terminal episode without value predictions");
-        }
-        r_prev = rewards.back();
+    if (rewards.size() != log_action_distributions.size()){
+        throw runtime_error("ERROR: cannot compute critic loss for episode with unequal reward/action lengths");
     }
-
-    auto stop = int64_t(rewards.size() - terminal);
-    auto start = 0;
+    if (terminated.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute critic loss for episode with unequal terminated/value lengths");
+    }
+    if (truncation_values.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute critic loss for episode with unequal truncation_values/value lengths");
+    }
 
     vector<float> td_rewards = rewards;
 
-    // Reverse iterate and apply recurrence relation with gamma
-    for(int64_t i=stop-1; i>=start; i--){
-        td_rewards[i] = td_rewards[i] + gamma*r_prev;
-        r_prev = td_rewards[i];
+    for (int64_t t = size-1; t>=0; t--) {
+        if (terminated[t]) {
+            // Terminal state: no bootstrap
+            td_rewards[t] = rewards[t];
+        } else if (truncation_values[t].item<bool>()) {
+            // Truncated state: bootstrap using cached t+1 value prediction
+            td_rewards[t] = rewards[t] + gamma * truncation_values[t].item<float>();
+        } else {
+            // Normal case: bootstrap from next step's td return
+            td_rewards[t] = rewards[t] + gamma * td_rewards[t + 1];
+        }
     }
 
     // Initialize loss
     auto loss = torch::zeros({}, torch::dtype(torch::kFloat32));
 
     // Sum the squared error loss for each time step
-    for (size_t i = start; i < stop; i++) {
+    for (size_t i=0; i<size; i++) {
         // Compute squared loss between the predicted value and the target return
         loss = loss + torch::pow(td_rewards[i] - value_predictions[i], 2) / 2;
     }

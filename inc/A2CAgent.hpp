@@ -32,8 +32,8 @@ class A2CAgent {
 public:
     inline A2CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
 
-    inline void train(shared_ptr<const Environment> env);
-    inline void test(shared_ptr<const Environment> env);
+    inline void train(shared_ptr<Environment> env);
+    inline void test(shared_ptr<Environment> env);
 
     /**
      * Additional signature for access to internal model params and optimizers, for use with the A3C algo for param sharing
@@ -41,7 +41,7 @@ public:
      * @param f method for A3C parameter syncing. Return true to skip subsequent worker optimize::step(), if desired
      */
     inline void train(
-        shared_ptr<const Environment> env,
+        shared_ptr<Environment> env,
         const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f
         );
 
@@ -88,7 +88,7 @@ A2CAgent::A2CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, 
 }
 
 
-void A2CAgent::train(shared_ptr<const Environment> env) {
+void A2CAgent::train(shared_ptr<Environment> env) {
     // By default, don't need to do anything with the internals for vanilla A2C. Instead provide null function.
     // Returning false results in default worker-specific optimizer::step().
     auto f_null = [&](shared_ptr<Model> a,shared_ptr<Model> b, size_t c){return false;};
@@ -97,14 +97,10 @@ void A2CAgent::train(shared_ptr<const Environment> env) {
 }
 
 
-void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f){
-    if (!env) {
+void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f){
+    if (!environment) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
-
-    // make a copy of the environment
-    shared_ptr<Environment> environment = env->clone();
-    environment->reset();
 
     size_t e = 0;
 
@@ -137,10 +133,12 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             environment->step(choice);
 
             float reward = environment->get_reward();
+            bool is_terminated = environment->is_terminated();
+            bool is_truncated = environment->is_truncated();
 
-            episode.update(log_probabilities, value_predict, choice, reward);
+            episode.update(log_probabilities, value_predict, choice, reward, is_terminated, is_truncated);
 
-            if (environment->is_terminated() or environment->is_truncated()) {
+            if (is_terminated or is_truncated) {
                 reward_ema = 0.99*reward_ema + (1 - 0.99)*environment->get_total_reward();
 
                 environment->reset();
@@ -148,11 +146,16 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
             }
         }
 
-        auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, true, environment->is_terminated());
+        // When sampling episodes, we pause for training, but training (GAE etc) needs a T+1 value estimate
+        Tensor input = environment->get_observation_space();
+        auto value_predict = torch::flatten(critic->forward(input));
+        episode.update_truncated(value_predict);
+
+        auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, true);
         auto entropy_loss = episode.compute_entropy_loss(false, true);
 
         auto actor_loss = td_loss + hyperparams.lambda*entropy_loss;
-        auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, false, environment->is_terminated());
+        auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, false);
 
         if (not hyperparams.silent and e % 10 == 0) {
             auto total_reward = episode.get_total_reward();
@@ -199,8 +202,8 @@ void A2CAgent::train(shared_ptr<const Environment> env, const function<bool(shar
 }
 
 
-void A2CAgent::test(shared_ptr<const Environment> env){
-    if (!env) {
+void A2CAgent::test(shared_ptr<Environment> environment){
+    if (!environment) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
 
@@ -209,16 +212,12 @@ void A2CAgent::test(shared_ptr<const Environment> env){
     actor->eval();
     critic->eval();
 
-    shared_ptr<Environment> environment = env->clone();
-
     auto prev_action = environment->get_action_space();
 
     size_t e = 0;
     std::thread t(std::bind(&Environment::render, environment, false));
 
     while (e < hyperparams.n_episodes) {
-        environment->reset();
-
         for (size_t s=0; s<hyperparams.episode_length; s++) {
             auto input = environment->get_observation_space().clone();
             input += 0.0001;

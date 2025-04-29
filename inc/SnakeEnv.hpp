@@ -51,7 +51,8 @@ class SnakeEnv: public Environment{
 
     int64_t i_permutation = 0;
 
-    int64_t patience_limit = width*height + 1;
+    // If the snake has traversed the equivalent of the entire grid without finding an apple then kill the session
+    int64_t patience_limit = width*height*1.1;
     int64_t patience_counter = 0;
 
     static constexpr float pi = 3.14159265359;
@@ -68,6 +69,8 @@ class SnakeEnv: public Environment{
     static constexpr float REWARD_COLLISION = -1;
     static constexpr float REWARD_APPLE = 3;
     static constexpr float REWARD_MOVE = -0.05;
+
+    static constexpr float OFFSET = 0.3;
 
     void initialize_snake();
     void add_apple_unsafe();

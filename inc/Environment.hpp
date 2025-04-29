@@ -36,7 +36,7 @@ public:
     // This is a factory method, it does not contain any time-dependent information, initialized with zeros
     virtual torch::Tensor get_action_space() const=0;
 
-    // This is a factory method, it does not contain any time-dependent information, initialized with zeros
+    // Fetch the observation space and perform any typical preprocessing
     virtual torch::Tensor get_observation_space() const=0;
 
     // The reward given by the current step in the environment

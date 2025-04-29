@@ -88,6 +88,13 @@ void A3CAgent::train(shared_ptr<const Environment> env){
         throw runtime_error("ERROR: Environment pointer is null");
     }
 
+    // Initialize environments in bulk, upfront because their true episode length may be longer than the sampling length
+    vector<shared_ptr<Environment> > envs;
+
+    for (size_t i=0; i<hyperparams.n_threads; i++) {
+        envs.emplace_back(env->clone());
+    }
+
     // Returns the number of threads that torch is using
     int n_torch_threads = torch::get_num_threads();
     torch::set_num_threads(1);
@@ -97,8 +104,6 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     }
 
     // Make a copy of the environment
-    shared_ptr<Environment> environment = env->clone();
-    environment->reset();
     atomic<size_t> episode;
 
     const auto lr_0 = hyperparams.learn_rate;
@@ -132,7 +137,7 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     for (size_t i=0; i<hyperparams.n_threads; i++) {
         threads.emplace_back([&]() {
             A2CAgent worker(hyperparams, actor->clone(), critic->clone());
-            worker.train(environment, sync_fn);
+            worker.train(envs[i], sync_fn);
         });
     }
 

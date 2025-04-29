@@ -172,7 +172,22 @@ int main(int argc, char* argv[]){
     app.add_option(
             "--lambda",
             params.lambda,
-            "lambda");
+            "lambda coeff for entropy loss");
+
+    app.add_option(
+            "--n_steps",
+            params.n_steps,
+            "n_steps total in training, ONLY FOR PPO");
+
+    app.add_option(
+            "--n_steps_per_cycle",
+            params.n_steps_per_cycle,
+            "n_steps_per_cycle, ONLY FOR PPO");
+
+    app.add_option(
+            "--n_epochs",
+            params.n_epochs,
+            "n_epochs, ONLY FOR PPO");
 
     app.add_flag(
             "--skip_test",

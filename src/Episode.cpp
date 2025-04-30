@@ -51,24 +51,25 @@ TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
 
 void TensorEpisode::clear() {
     size = 0;
-    td_rewards = torch::Tensor();
+    td_rewards = Tensor();
 }
 
 
 void TensorEpisode::compute_td_rewards(float gamma) {
     td_rewards = torch::zeros(rewards.sizes(), rewards.options());
+    Tensor r = torch::zeros({}, rewards.options());
 
-    for (int64_t t = size-1; t>=0; t--) {
+    for (int64_t t=size-1; t>=0; t--) {
         if (terminated[t].item<bool>()) {
-            // Terminal state: no bootstrap
-            td_rewards[t] = rewards[t];
+            // Reset to zero at episode boundaries
+            r = torch::zeros({}, rewards.options());
         } else if (truncation_values[t].item<bool>()) {
-            // Truncated state: bootstrap using cached t+1 value prediction
-            td_rewards[t] = rewards[t] + gamma * truncation_values[t];
-        } else {
-            // Normal case: bootstrap from next step's td return
-            td_rewards[t] = rewards[t] + gamma * td_rewards[t + 1];
+            // Bootstrap
+            r = truncation_values[t];
         }
+
+        r = rewards[t] + gamma * r;
+        td_rewards[t] = r;
     }
 }
 
@@ -121,7 +122,11 @@ Tensor TensorEpisode::compute_entropy_loss(const Tensor& log_action_probs, bool 
     // actions shape: [N,A] where A is the action space size, N is batch size
     // Compute -Σ log(p(x_i))*p(x_i) for i in A
     // NOTE: distributions are already in log space
-    auto entropy = -torch::sum(torch::exp(log_action_probs)*log_action_probs, 1);
+
+    // Avoid -nan if the action space ever approaches 0 (causes crash by torch assertion)
+    auto safe_log_probs = log_action_probs.clamp(-100.0, 0.0);
+
+    auto entropy = -torch::sum(torch::exp(safe_log_probs)*safe_log_probs, 1);
 
     if (norm){
         // The maximum possible entropy is -log(1/A) or log(A) where A is the size of the action distribution because
@@ -185,8 +190,8 @@ Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
     Tensor advantages = torch::zeros({size}, rewards.options()).squeeze();
     Tensor last_advantage = torch::zeros({}, rewards.options());
 
-    // terminated is kInt8, shape [N]
-    for (int t = size-1; t >= 0; t--) {
+    // `terminated` is kInt8, shape [N]
+    for (int64_t t = size-1; t >= 0; t--) {
         Tensor next_value;
 
         if (t == size-1) {
@@ -196,8 +201,8 @@ Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
             next_value = value_predictions[t+1];
         }
 
-        Tensor delta = rewards[t] + gamma * next_value * terminated[t] - value_predictions[t];
-        advantages[t] = delta + gamma * lambda * terminated[t] * last_advantage;
+        Tensor delta = rewards[t] + gamma * next_value * (1- terminated[t]) - value_predictions[t];
+        advantages[t] = delta + gamma * lambda * (1- terminated[t]) * last_advantage;
         last_advantage = advantages[t];
     }
 
@@ -206,23 +211,20 @@ Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
 
 
 Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float gae_lambda, float gae_gamma, float eps, bool mean) const{
-    if (not td_rewards.defined()) {
-        throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
-    }
-
     // Shapes:
     // action_distributions  [N,A]
     // actions               [N]    (indexes of chosen actions)
     // td_rewards            [N]
     // value_predicitions    [N]
 
-    auto p_old = torch::exp(log_action_distributions.detach().gather(1, actions.unsqueeze(1)));
-    auto p_new = torch::exp(log_action_probs_new.gather(1, actions.unsqueeze(1)));
+    auto p_old = log_action_distributions.detach().gather(1, actions.unsqueeze(1));
+    auto p_new = log_action_probs_new.gather(1, actions.unsqueeze(1));
 
     // Advantage estimate. Don't want to backprop through the critic so it is detached (see compute_GAE method)
     auto a = compute_GAE(gae_gamma, gae_lambda);
 
-    auto r = p_new / p_old;
+    auto r = torch::exp(p_new - p_old).squeeze();
+
     auto r_clip = torch::clip(r, 1-eps, 1+eps);
 
     auto loss = torch::min(r*a, r_clip*a);
@@ -339,14 +341,27 @@ void Episode::update_truncated(Tensor& value_prediction){
 
 void Episode::to_tensor(TensorEpisode& tensor_episode) {
     tensor_episode.size = int64_t(size);
-    tensor_episode.states = torch::cat(states, 0);
-    tensor_episode.log_action_distributions = torch::stack(log_action_distributions);
-    tensor_episode.value_predictions = torch::cat(value_predictions, 0);
-    tensor_episode.actions = torch::tensor(actions, torch::kInt64);
-    tensor_episode.rewards = torch::tensor(rewards, torch::kFloat);
-    tensor_episode.terminated = torch::tensor(terminated, torch::kInt8);
-    tensor_episode.truncation_values = torch::cat(truncation_values, 0);
-
+    if (not states.empty()) {
+        tensor_episode.states = torch::cat(states, 0);
+    }
+    if (not log_action_distributions.empty()) {
+        tensor_episode.log_action_distributions = torch::stack(log_action_distributions);
+    }
+    if (not value_predictions.empty()) {
+        tensor_episode.value_predictions = torch::cat(value_predictions, 0);
+    }
+    if (not actions.empty()) {
+        tensor_episode.actions = torch::tensor(actions, torch::kInt64);
+    }
+    if (not rewards.empty()) {
+        tensor_episode.rewards = torch::tensor(rewards, torch::kFloat);
+    }
+    if (not terminated.empty()) {
+        tensor_episode.terminated = torch::tensor(terminated, torch::kInt8);
+    }
+    if (not truncation_values.empty()) {
+        tensor_episode.truncation_values = torch::cat(truncation_values, 0);
+    }
 }
 
 
@@ -354,7 +369,7 @@ Tensor Episode::compute_entropy(const Tensor& log_distribution, bool norm) const
     auto entropy = torch::tensor({0}, torch::dtype(torch::kFloat32));
 
     for (size_t i=0; i < log_distribution.sizes()[0]; i++){
-        entropy = entropy + torch::exp(log_distribution[i]) * log_distribution[i];
+        entropy = entropy + torch::exp(log_distribution[i].clamp(-100,0) * log_distribution[i].clamp(-100,0));
     }
 
     if (norm){
@@ -408,18 +423,19 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage) const{
     }
 
     vector<float> td_rewards = rewards;
+    float r = 0;
 
-    for (int64_t t = size-1; t>=0; t--) {
+    for (int64_t t=int64_t(size)-1; t>=0; t--) {
         if (terminated[t]) {
-            // Terminal state: no bootstrap
-            td_rewards[t] = rewards[t];
+            // Reset at episode boundaries
+            r = 0;
         } else if (truncation_values[t].item<bool>()) {
-            // Truncated state: bootstrap using cached t+1 value prediction
-            td_rewards[t] = rewards[t] + gamma * truncation_values[t].item<float>();
-        } else {
-            // Normal case: bootstrap from next step's td return
-            td_rewards[t] = rewards[t] + gamma * td_rewards[t + 1];
+            // Bootstrap
+            r = truncation_values[t].item<float>();
         }
+
+        r = rewards[t] + gamma * r;
+        td_rewards[t] = r;
     }
 
     auto loss = torch::tensor(0, torch::dtype(torch::kFloat32));
@@ -486,18 +502,19 @@ Tensor Episode::compute_critic_loss(float gamma, bool mean) const{
     }
 
     vector<float> td_rewards = rewards;
+    float r = 0;
 
-    for (int64_t t = size-1; t>=0; t--) {
+    for (int64_t t=int64_t(size)-1; t>=0; t--) {
         if (terminated[t]) {
-            // Terminal state: no bootstrap
-            td_rewards[t] = rewards[t];
+            // Reset at episode boundaries
+            r = 0;
         } else if (truncation_values[t].item<bool>()) {
-            // Truncated state: bootstrap using cached t+1 value prediction
-            td_rewards[t] = rewards[t] + gamma * truncation_values[t].item<float>();
-        } else {
-            // Normal case: bootstrap from next step's td return
-            td_rewards[t] = rewards[t] + gamma * td_rewards[t + 1];
+            // Bootstrap
+            r = truncation_values[t].item<float>();
         }
+
+        r = rewards[t] + gamma * r;
+        td_rewards[t] = r;
     }
 
     // Initialize loss

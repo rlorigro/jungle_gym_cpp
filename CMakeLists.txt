@@ -146,6 +146,7 @@ endif()
 
 set(TESTS
     test_async_iterator
+    test_episode
     test_snake_env
     test_sdl2
     benchmark_a3c

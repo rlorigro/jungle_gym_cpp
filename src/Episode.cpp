@@ -297,10 +297,10 @@ void Episode::update(Tensor& log_action_probs, int64_t action_index, float rewar
 }
 
 
-void Episode::update(Tensor& state, Tensor& log_action_probs, int64_t action_index, float reward, bool is_terminated, bool is_truncated){
+void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t action_index, float reward, bool is_terminated, bool is_truncated){
     if (not is_truncated) {
-        states.emplace_back(state);
         log_action_distributions.emplace_back(log_action_probs);
+        value_predictions.emplace_back(value_prediction);
         actions.emplace_back(action_index);
         rewards.emplace_back(reward);
         terminated.emplace_back(is_terminated);
@@ -367,10 +367,9 @@ void Episode::to_tensor(TensorEpisode& tensor_episode) {
 
 Tensor Episode::compute_entropy(const Tensor& log_distribution, bool norm) const{
     auto entropy = torch::tensor({0}, torch::dtype(torch::kFloat32));
+    auto log_distribution_safe = log_distribution.clamp(-100,0);
 
-    for (size_t i=0; i < log_distribution.sizes()[0]; i++){
-        entropy = entropy + torch::exp(log_distribution[i].clamp(-100,0) * log_distribution[i].clamp(-100,0));
-    }
+    entropy = torch::sum(torch::exp(log_distribution_safe) * log_distribution_safe);
 
     if (norm){
         // The maximum possible entropy is -log(1/A) or log(A) where A is the size of the action distribution because
@@ -403,26 +402,8 @@ Tensor Episode::compute_entropy_loss(bool mean, bool norm) const{
 }
 
 
-Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage) const{
-    if (gamma < 0 or gamma >= 1){
-        throw runtime_error("ERROR: gamma must be in range [0,1)");
-    }
-
-    // Check that sizes are equal
-    if (rewards.size() != log_action_distributions.size()){
-        throw runtime_error("ERROR: cannot compute loss for episode with unequal reward/action lengths");
-    }
-    if (advantage and rewards.size() != value_predictions.size()){
-        throw runtime_error("ERROR: cannot compute loss with advantage for episode with unequal reward/value lengths");
-    }
-    if (terminated.size() != value_predictions.size()){
-        throw runtime_error("ERROR: cannot compute loss for episode with unequal terminated/value lengths");
-    }
-    if (advantage and truncation_values.size() != value_predictions.size()){
-        throw runtime_error("ERROR: cannot compute loss with advantage for episode with unequal truncation_values/value lengths");
-    }
-
-    vector<float> td_rewards = rewards;
+void Episode::compute_td_rewards(vector<float>& result, float gamma) const{
+    result = rewards;
     float r = 0;
 
     for (int64_t t=int64_t(size)-1; t>=0; t--) {
@@ -434,9 +415,33 @@ Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage) const{
             r = truncation_values[t].item<float>();
         }
 
-        r = rewards[t] + gamma * r;
-        td_rewards[t] = r;
+        r = rewards[t] + gamma*r;
+        result[t] = r;
     }
+}
+
+
+Tensor Episode::compute_td_loss(float gamma, bool mean, bool advantage) const{
+    if (gamma < 0 or gamma >= 1){
+        throw runtime_error("ERROR: gamma must be in range [0,1)");
+    }
+
+    // Check that sizes are equal
+    if (rewards.size() != log_action_distributions.size()){
+        throw runtime_error("ERROR: cannot compute loss for episode with unequal reward/action lengths");
+    }
+    if (advantage and rewards.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute loss with advantage for episode with unequal reward/value lengths: " + to_string(rewards.size()) + "/" + to_string(value_predictions.size()));
+    }
+    if (terminated.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute loss for episode with unequal terminated/value lengths");
+    }
+    if (advantage and truncation_values.size() != value_predictions.size()){
+        throw runtime_error("ERROR: cannot compute loss with advantage for episode with unequal truncation_values/value lengths");
+    }
+
+    vector<float> td_rewards;
+    compute_td_rewards(td_rewards, gamma);
 
     auto loss = torch::tensor(0, torch::dtype(torch::kFloat32));
 
@@ -501,21 +506,8 @@ Tensor Episode::compute_critic_loss(float gamma, bool mean) const{
         throw runtime_error("ERROR: cannot compute critic loss for episode with unequal truncation_values/value lengths");
     }
 
-    vector<float> td_rewards = rewards;
-    float r = 0;
-
-    for (int64_t t=int64_t(size)-1; t>=0; t--) {
-        if (terminated[t]) {
-            // Reset at episode boundaries
-            r = 0;
-        } else if (truncation_values[t].item<bool>()) {
-            // Bootstrap
-            r = truncation_values[t].item<float>();
-        }
-
-        r = rewards[t] + gamma * r;
-        td_rewards[t] = r;
-    }
+    vector<float> td_rewards;
+    compute_td_rewards(td_rewards, gamma);
 
     // Initialize loss
     auto loss = torch::zeros({}, torch::dtype(torch::kFloat32));

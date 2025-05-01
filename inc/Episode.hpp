@@ -121,6 +121,7 @@ public:
     // Return the sum or mean depending on `mean`
     [[nodiscard]] Tensor compute_critic_loss(float gamma, bool mean) const;
 
+    void compute_td_rewards(vector<float>& td_rewards, float gamma) const;
     float get_total_reward() const;
 
     /**

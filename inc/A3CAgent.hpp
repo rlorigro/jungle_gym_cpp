@@ -85,7 +85,7 @@ A3CAgent::A3CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, 
 
 void A3CAgent::train(shared_ptr<const Environment> env){
     if (!env) {
-        throw runtime_error("ERROR: Environment pointer is null");
+        throw runtime_error("ERROR: A3CAgent::train Environment pointer is null");
     }
 
     // Initialize environments in bulk, upfront because their true episode length may be longer than the sampling length
@@ -103,7 +103,6 @@ void A3CAgent::train(shared_ptr<const Environment> env){
         cerr << "n_torch_threads: " << n_torch_threads << " ... setting to 1 for A3C training." << '\n';
     }
 
-    // Make a copy of the environment
     atomic<size_t> episode;
 
     const auto lr_0 = hyperparams.learn_rate;
@@ -134,10 +133,16 @@ void A3CAgent::train(shared_ptr<const Environment> env){
     };
 
     vector<thread> threads;
+    vector<A2CAgent> workers;
+
     for (size_t i=0; i<hyperparams.n_threads; i++) {
-        threads.emplace_back([&]() {
-            A2CAgent worker(hyperparams, actor->clone(), critic->clone());
-            worker.train(envs[i], sync_fn);
+        workers.emplace_back(hyperparams, actor->clone(), critic->clone());
+    }
+
+    for (size_t i=0; i<hyperparams.n_threads; i++) {
+        // Avoid sneaky bug with explicit capture of i by value
+        threads.emplace_back([i, &workers, &envs, &sync_fn]() {
+            workers[i].train(envs[i], sync_fn);
         });
     }
 

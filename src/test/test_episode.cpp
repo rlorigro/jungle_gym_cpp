@@ -59,6 +59,9 @@ bool test_td_rewards() {
     TensorEpisode te;
     ep.to_tensor(te);
 
+    // ---- test TensorEpisode ----
+    cerr << "TensorEpisode" << '\n';
+
     // gamma = 1
     te.compute_td_rewards(1.0);
 
@@ -67,6 +70,19 @@ bool test_td_rewards() {
 
     cerr << "expected:\n" << expected << '\n';
     cerr << "te.td_rewards:\n" << te.td_rewards << '\n';
+
+    // ---- test Episode ----
+    cerr << "Episode" << '\n';
+
+    // gamma = 1
+    vector<float> td_rewards;
+    ep.compute_td_rewards(td_rewards, 1.0);
+
+    vector<float> expected_ep = {6.0, 5.0, 3.0};
+    success = success and (td_rewards == expected_ep);
+
+    cerr << "expected:\n" << expected_ep << '\n';
+    cerr << "te.td_rewards:\n" << td_rewards << '\n';
 
     return success;
 }
@@ -172,7 +188,19 @@ bool test_entropy_loss() {
     auto entropy = te.compute_entropy_loss(true, true);
     auto expected = torch::tensor(-1.0f);
 
+    // ---- test TensorEpisode ----
+    cerr << "TensorEpisode" << '\n';
+
     bool success = approx_equal(entropy, expected);
+
+    cerr << "expected:\n" << expected << '\n';
+    cerr << "entropy:\n" << entropy << '\n';
+
+    // ---- test Episode ----
+    cerr << "Episode" << '\n';
+
+    entropy = ep.compute_entropy_loss(true, true);
+    success = success and approx_equal(entropy, expected);
 
     cerr << "expected:\n" << expected << '\n';
     cerr << "entropy:\n" << entropy << '\n';
@@ -236,7 +264,10 @@ bool test_clip_loss() {
     cerr << "clip_loss:\n" << clip_loss.item<float>() << '\n';
 
     new_log_probs = te.log_action_distributions.clone();
+
+    // Divide pi_old by 2
     te.log_action_distributions = te.log_action_distributions - 0.301029996;
+
     clip_loss = te.compute_clip_loss(new_log_probs, 0.0, 0.0, 0.2, true);
 
     // Should be clipped at 1.2 if the advantages are 1.0 because the ratio is now 2.0  (1.0/0.5)
@@ -255,33 +286,40 @@ bool test_clip_loss() {
 int main() {
     vector<bool> successes;
 
+    cerr << "-----------------\n";
     cerr << "Test TD Rewards: \n";
     successes.push_back(test_td_rewards());
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
+    cerr << "-----------------\n";
     cerr << "Test GAE:        \n";
     successes.push_back(test_gae());
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
+    cerr << "-----------------\n";
     cerr << "Test GAE (0.9, 0.0)\n";
     successes.push_back(test_gae(0.9, 0.0, torch::tensor({0.86, 1.87, 2.7})));
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
+    cerr << "-----------------\n";
     cerr << "Test GAE (1.0, 1.0)\n";
     successes.push_back(test_gae(1.0, 1.0, torch::tensor({5.5, 4.6, 2.7})));
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
+    cerr << "-----------------\n";
     cerr << "Test GAE (0.0, 0.5)\n";
     successes.push_back(test_gae(0.0, 0.5, torch::tensor({0.5, 1.6, 2.7})));
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
+    cerr << "-----------------\n";
     cerr << "Test Entropy:    \n";
     successes.push_back(test_entropy_loss());
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
+    cerr << "-----------------\n";
     cerr << "Test Clip Loss:  \n";
     successes.push_back(test_clip_loss());
-    cerr << (successes.back() ? "PASS" : "FAIL") << '\n';
+    cerr << (successes.back() ? "PASS" : "FAIL") << '\n' << '\n';
 
     for (auto success : successes) {
         if (not success) {

@@ -99,7 +99,7 @@ void A2CAgent::train(shared_ptr<Environment> env) {
 
 void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f){
     if (!environment) {
-        throw std::runtime_error("ERROR: Environment pointer is null");
+        throw std::runtime_error("ERROR: A2CAgent::train Environment pointer is null");
     }
 
     size_t e = 0;
@@ -107,7 +107,10 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
     // TODO: un-remove epsilon greedy implementation? make optional?
     float epsilon = 0;
 
-    float reward_ema = 0;
+    float reward_ema = std::numeric_limits<float>::min();
+
+    bool is_terminated = false;
+    bool is_truncated = false;
 
     while (e < hyperparams.n_episodes) {
         episode.clear();
@@ -133,13 +136,17 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
             environment->step(choice);
 
             float reward = environment->get_reward();
-            bool is_terminated = environment->is_terminated();
-            bool is_truncated = environment->is_truncated();
+            is_terminated = environment->is_terminated();
+            is_truncated = environment->is_truncated();
 
             episode.update(log_probabilities, value_predict, choice, reward, is_terminated, is_truncated);
 
             if (is_terminated or is_truncated) {
-                reward_ema = 0.99*reward_ema + (1 - 0.99)*environment->get_total_reward();
+                if (reward_ema == std::numeric_limits<float>::min()) {
+                    reward_ema = environment->get_total_reward();
+                }
+
+                reward_ema = 0.999*reward_ema + (1 - 0.999)*environment->get_total_reward();
 
                 environment->reset();
                 break;
@@ -147,9 +154,11 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
         }
 
         // When sampling episodes, we pause for training, but training (GAE etc) needs a T+1 value estimate
-        Tensor input = environment->get_observation_space();
-        auto value_predict = torch::flatten(critic->forward(input));
-        episode.update_truncated(value_predict);
+        if (not is_terminated and not is_truncated) {
+            Tensor input = environment->get_observation_space();
+            auto value_predict = torch::flatten(critic->forward(input));
+            episode.update_truncated(value_predict);
+        }
 
         auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, true);
         auto entropy_loss = episode.compute_entropy_loss(false, true);

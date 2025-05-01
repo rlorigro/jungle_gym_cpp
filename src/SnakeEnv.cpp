@@ -146,13 +146,13 @@ torch::Tensor SnakeEnv::get_action_space() const {
 torch::Tensor SnakeEnv::get_observation_space() const {
     auto o = observation_space.clone();
 
-    float a = 1.0;
-    float b = 0.5;
+    float a = 0.6;
+    float b = 0.35;
     float delta = (a-b) / float(snake.size() - 2);
 
     size_t i = 0;
     for (auto [x,y]: snake) {
-        if (i == 0) {
+        if (i <= 1) {
             // Don't rescale head pos
             i++;
             continue;

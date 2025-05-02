@@ -1,6 +1,8 @@
 # jungle_gym
 A C++ implementation of reinforcement learning algorithms using libtorch.
 
+🚧 This repository is currently under development 🚧 
+
 ## Environments
 
 ### SnakeEnv
@@ -228,10 +230,15 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 *Apologies for the low GIF quality, this test run includes added noise*
 
+
+### Why C++? (a.k.a. why NOT Python?)
+I chose C++ because I think it is well suited for building multithreaded applications but also because I want it to be able to interface directly with high performance methods/algos also written in C++. Part of the appeal of RL (to me) is that it can be applied to many different types of control and optimization problems. For training/evaluation/reward purposes, it is useful to be able to perform CPU or sequentially bound operations as fast as possible. There are many benchmark environments available with Python interfaces but my eventual goal is to apply this to my own custom environments. In addition to these considerations, the PyTorch RL support/documentation is fairly limited and lacking structure, so I found it difficult to use as a starting point.
+
 ## To do
 - ~~Benchmark speed vs n_threads for A3C~~
 - ~~Add model checkpoints/saving/loading~~
 - Print critic's value estimation for every state during test demo
+- Exhaustive tests and fix A3C regression
 - plot attention map
 - ~~implement a3c (now currently a2c)~~
 - ~~Critic network and baseline subtraction~~

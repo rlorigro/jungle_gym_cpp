@@ -63,6 +63,8 @@ public:
     // Return the sum or mean depending on `mean`
     [[nodiscard]] Tensor compute_critic_loss(bool mean) const;
 
+    static const float INF;
+
     /**
      * Assuming that this TensorEpisode has action probabilities stored from θ_old, compute the L_CLIP loss term as
      * defined by PPO (Schulman et al. 2017) in which the ratio and the gradients are computed using θ_new provided
@@ -123,6 +125,8 @@ public:
 
     void compute_td_rewards(vector<float>& td_rewards, float gamma) const;
     float get_total_reward() const;
+
+    static const float INF;
 
     /**
      * NOTE: truncations DON'T append tensors

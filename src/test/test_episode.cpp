@@ -123,7 +123,7 @@ bool test_gae() {
 
     TensorEpisode te;
     ep.to_tensor(te);
-    te.truncation_values = torch::zeros_like(te.rewards);
+    // te.truncation_values = torch::zeros_like(te.rewards);
 
     auto adv = te.compute_GAE(0.9, 0.95);
     auto expected = torch::tensor({4.432, 4.178, 2.7});
@@ -161,7 +161,7 @@ bool test_gae(float gamma, float lambda, const torch::Tensor& expected) {
 
     TensorEpisode te;
     ep.to_tensor(te);
-    te.truncation_values = torch::zeros_like(te.rewards);
+//    te.truncation_values = torch::full(te.rewards.sizes(),-Episode::INF);
 
     auto adv = te.compute_GAE(gamma, lambda);
     bool success = approx_equal(adv, expected, 1e-3);

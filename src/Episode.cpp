@@ -13,6 +13,8 @@ using namespace torch::indexing;
 
 namespace JungleGym{
 
+const float Episode::INF = std::numeric_limits<float>::infinity();
+const float TensorEpisode::INF = std::numeric_limits<float>::infinity();
 
 TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
         size(0)
@@ -63,9 +65,12 @@ void TensorEpisode::compute_td_rewards(float gamma) {
         if (terminated[t].item<bool>()) {
             // Reset to zero at episode boundaries
             r = torch::zeros({}, rewards.options());
-        } else if (truncation_values[t].item<bool>()) {
-            // Bootstrap
-            r = truncation_values[t];
+        } else {
+            auto v = truncation_values[t].item<float>();
+            if (v > -INF) {
+                // Bootstrap and reset (ignore future values)
+                r = truncation_values[t];
+            }
         }
 
         r = rewards[t] + gamma * r;
@@ -82,14 +87,48 @@ void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(Tenso
     e.size = batch_size;
 
     for (int64_t i=0; i<n_batches; i++) {
-        e.log_action_distributions = log_action_distributions.slice(0, i*batch_size, (i+1)*batch_size);
-        e.value_predictions = value_predictions.slice(0, i*batch_size, (i+1)*batch_size);
-        e.states = states.slice(0, i*batch_size, (i+1)*batch_size);
-        e.actions = actions.slice(0, i*batch_size, (i+1)*batch_size);
-        e.rewards = rewards.slice(0, i*batch_size, (i+1)*batch_size);
-        e.td_rewards = td_rewards.slice(0, i*batch_size, (i+1)*batch_size);
-        e.terminated = terminated.slice(0, i*batch_size, (i+1)*batch_size);
-        e.truncation_values = truncation_values.slice(0, i*batch_size, (i+1)*batch_size);
+        if (log_action_distributions.defined()){
+            e.log_action_distributions = log_action_distributions.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        if (value_predictions.defined()){
+            e.value_predictions = value_predictions.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        else{
+            throw runtime_error("ERROR: cannot batch episode without terminated Tensor");
+        }
+        if (states.defined()){
+            e.states = states.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        if (actions.defined()){
+            e.actions = actions.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        if (rewards.defined()){
+            e.rewards = rewards.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        if (terminated.defined()){
+            e.terminated = terminated.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        else{
+            throw runtime_error("ERROR: cannot batch episode without terminated Tensor");
+        }
+        if (truncation_values.defined()){
+            e.truncation_values = truncation_values.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+        else{
+            throw runtime_error("ERROR: cannot batch episode without truncation_values Tensor");
+        }
+        if (td_rewards.defined()) {
+            e.td_rewards = td_rewards.slice(0, i*batch_size, (i+1)*batch_size);
+        }
+
+        bool is_truncated = truncation_values[(i+1)*batch_size-1].item<float>() > -INF;
+        bool is_terminated = terminated[(i+1)*batch_size-1].item<bool>();
+
+        // Initialize the t+1 value for the end of the episode batch, because truncated eps must be bootstrapped
+        // and here we are artificially truncating the ep into batches
+        if (not (is_truncated or is_terminated) and (i+1)*batch_size < size) {
+            truncation_values[(i+1)*batch_size-1] = value_predictions[(i+1)*batch_size];
+        }
 
         f(e);
     }
@@ -97,14 +136,48 @@ void TensorEpisode::for_each_batch(int64_t batch_size, const function<void(Tenso
     if (remainder > 0) {
         e.size = remainder;
 
-        e.log_action_distributions = log_action_distributions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.value_predictions = value_predictions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.states = states.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.actions = actions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.rewards = rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.td_rewards = td_rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.terminated = terminated.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
-        e.truncation_values = truncation_values.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        if (log_action_distributions.defined()){
+            e.log_action_distributions = log_action_distributions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        if (value_predictions.defined()){
+            e.value_predictions = value_predictions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        else{
+            throw runtime_error("ERROR: cannot batch episode without terminated Tensor");
+        }
+        if (states.defined()){
+            e.states = states.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        if (actions.defined()){
+            e.actions = actions.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        if (rewards.defined()){
+            e.rewards = rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        if (terminated.defined()){
+            e.terminated = terminated.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        else{
+            throw runtime_error("ERROR: cannot batch episode without terminated Tensor");
+        }
+        if (truncation_values.defined()){
+            e.truncation_values = truncation_values.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+        else{
+            throw runtime_error("ERROR: cannot batch episode without truncation_values Tensor");
+        }
+        if (td_rewards.defined()) {
+            e.td_rewards = td_rewards.slice(0, n_batches*batch_size, n_batches*batch_size+remainder);
+        }
+
+        bool is_truncated = truncation_values[n_batches*batch_size+remainder-1].item<float>() > -INF;
+        bool is_terminated = terminated[n_batches*batch_size+remainder-1].item<bool>();
+
+        // Initialize the t+1 value for the end of the episode batch, because truncated eps must be bootstrapped
+        // and here we are artificially truncating the ep into batches
+        if (not (is_truncated or is_terminated) and n_batches*batch_size+remainder < size) {
+            truncation_values[n_batches*batch_size+remainder-1] = value_predictions[n_batches*batch_size+remainder];
+        }
 
         f(e);
     }
@@ -189,16 +262,30 @@ Tensor TensorEpisode::compute_td_loss(bool mean, bool advantage) const{
 Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
     Tensor advantages = torch::zeros({size}, rewards.options()).squeeze();
     Tensor last_advantage = torch::zeros({}, rewards.options());
+    Tensor next_value;
+
+    // Initialize the t+1 value for the end of the episode
+    if (truncation_values[size-1].item<float>() > -INF) {
+        next_value = truncation_values[size-1];
+    }
+    else if (terminated[size-1].item<bool>()){
+        next_value = torch::zeros({}, rewards.options());
+    }
+    else {
+        throw runtime_error("ERROR: last item in TensorEpisode neither terminated nor truncated, cannot bootstrap V");
+    }
 
     // `terminated` is kInt8, shape [N]
     for (int64_t t = size-1; t >= 0; t--) {
-        Tensor next_value;
 
-        if (t == size-1) {
-            // Is zero if non-truncated, cached T+1 value otherwise
-            next_value = truncation_values[t];
-        } else {
-            next_value = value_predictions[t+1];
+        if (t < size - 1) {
+            // Is -INF if non-truncated, cached T+1 value otherwise
+            if (truncation_values[t].item<float>() > -INF) {
+                // Bootstrap and reset (ignore future values)
+                next_value = truncation_values[t];
+            } else {
+                next_value = value_predictions[t+1];
+            }
         }
 
         Tensor delta = rewards[t] + gamma * next_value * (1- terminated[t]) - value_predictions[t];
@@ -222,7 +309,6 @@ Tensor TensorEpisode::compute_clip_loss(Tensor& log_action_probs_new, float gae_
 
     // Advantage estimate. Don't want to backprop through the critic so it is detached (see compute_GAE method)
     auto a = compute_GAE(gae_gamma, gae_lambda);
-
     auto r = torch::exp(p_new - p_old).squeeze();
 
     auto r_clip = torch::clip(r, 1-eps, 1+eps);
@@ -291,7 +377,7 @@ void Episode::update(Tensor& log_action_probs, int64_t action_index, float rewar
         actions.emplace_back(action_index);
         rewards.emplace_back(reward);
         terminated.emplace_back(is_terminated);
-        truncation_values.emplace_back(torch::zeros({1}));
+        truncation_values.emplace_back(torch::full({1}, -INF));
         size++;
     }
 }
@@ -304,7 +390,7 @@ void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t
         actions.emplace_back(action_index);
         rewards.emplace_back(reward);
         terminated.emplace_back(is_terminated);
-        truncation_values.emplace_back(torch::zeros({1}));
+        truncation_values.emplace_back(torch::full({1}, -INF));
         size++;
     }
 }
@@ -318,7 +404,7 @@ void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_pred
         actions.emplace_back(action_index);
         rewards.emplace_back(reward);
         terminated.emplace_back(is_terminated);
-        truncation_values.emplace_back(torch::zeros({1}));
+        truncation_values.emplace_back(torch::full({1}, -INF));
         size++;
     }
     else {
@@ -410,9 +496,12 @@ void Episode::compute_td_rewards(vector<float>& result, float gamma) const{
         if (terminated[t]) {
             // Reset at episode boundaries
             r = 0;
-        } else if (truncation_values[t].item<bool>()) {
-            // Bootstrap
-            r = truncation_values[t].item<float>();
+        } else {
+            auto v = truncation_values[t].item<float>();
+            if (v > -INF) {
+                // Bootstrap and reset (ignore future values)
+                r = v;
+            }
         }
 
         r = rewards[t] + gamma*r;

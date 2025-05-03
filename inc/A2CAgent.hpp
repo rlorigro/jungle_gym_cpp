@@ -149,7 +149,6 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
                 reward_ema = 0.999*reward_ema + (1 - 0.999)*environment->get_total_reward();
 
                 environment->reset();
-                break;
             }
         }
 

@@ -159,11 +159,11 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
             episode.update_truncated(value_predict);
         }
 
-        auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, true);
-        auto entropy_loss = episode.compute_entropy_loss(false, true);
+        auto td_loss = episode.compute_td_loss(hyperparams.gamma, true, true);
+        auto entropy_loss = episode.compute_entropy_loss(true, true);
 
         auto actor_loss = td_loss + hyperparams.lambda*entropy_loss;
-        auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, false);
+        auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, true);
 
         if (not hyperparams.silent and e % 10 == 0) {
             auto total_reward = episode.get_total_reward();

@@ -250,9 +250,9 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
             auto action_dists = actor->forward(batch.states);
             batch.value_predictions = critic->forward(batch.states).squeeze();
 
-            auto critic_loss = batch.compute_critic_loss(false);
-            auto clip_loss = batch.compute_clip_loss(action_dists, 0.95, hyperparams.gamma, 0.2, false);
-            auto entropy_loss = batch.compute_entropy_loss(action_dists, false, true);
+            auto critic_loss = batch.compute_critic_loss(true);
+            auto clip_loss = batch.compute_clip_loss(action_dists, 0.95, hyperparams.gamma, 0.2, true);
+            auto entropy_loss = batch.compute_entropy_loss(action_dists, true, true);
 
             // if (not hyperparams.silent) {
             if (not hyperparams.silent and b == 0) {

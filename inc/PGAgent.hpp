@@ -134,8 +134,8 @@ void PGAgent::train(shared_ptr<const Environment> env){
 
         e++;
 
-        auto td_loss = episode.compute_td_loss(hyperparams.gamma, false, false);
-        auto entropy_loss = episode.compute_entropy_loss(false, false);
+        auto td_loss = episode.compute_td_loss(hyperparams.gamma, true, false);
+        auto entropy_loss = episode.compute_entropy_loss(true, false);
 
         if (not hyperparams.silent) {
             // Print some stats, increment loss using episode, update model if batch_size accumulated

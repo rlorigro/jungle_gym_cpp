@@ -189,7 +189,7 @@ $$
 where
 
 $$
-\delta_t = \underbrace{r_t + \gamma V(s_{t+1})}_{\text{Target}} - \underbrace{V(s_t)}_{\text{Current estimate}}
+\delta_t = \underbrace{r_t + \gamma V(s_{t+1})}_{Target} - \underbrace{V(s_t)} _{Current estimate}
 $$
 
 Taken by itself, $\delta_t$ can be referred to as the "TD error", though in the context of trying to compute the 

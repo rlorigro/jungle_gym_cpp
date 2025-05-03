@@ -393,6 +393,17 @@ void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t
         truncation_values.emplace_back(torch::full({1}, -INF));
         size++;
     }
+    else if (size > 0){
+        // Don't include the state that was truncated, but store the value in the previous index in case needed for the
+        // GAE estimate or similar, which expects a t+1 estimate
+
+        // For cases where we receive the truncated signal, usually the exact boundary is arbitrary
+        // so we just pretend this state wasn't visited and update the values
+        truncation_values.back() = value_prediction;
+    }
+    // ELSE: if the episode is empty AND being truncated, then it is ignored, because it's not necessary.
+    // In this unusual case, it would have already been artificially truncated in the previous iteration, so skipping it
+    // here is equivalent/redundant.
 }
 
 
@@ -407,7 +418,7 @@ void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_pred
         truncation_values.emplace_back(torch::full({1}, -INF));
         size++;
     }
-    else {
+    else if (size > 0){
         // Don't include the state that was truncated, but store the value in the previous index in case needed for the
         // GAE estimate or similar, which expects a t+1 estimate
 
@@ -415,6 +426,9 @@ void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_pred
         // so we just pretend this state wasn't visited and update the values
         truncation_values.back() = value_prediction;
     }
+    // ELSE: if the episode is empty AND being truncated, then it is ignored, because it's not necessary.
+    // In this unusual case, it would have already been artificially truncated in the previous iteration, so skipping it
+    // here is equivalent/redundant.
 }
 
 

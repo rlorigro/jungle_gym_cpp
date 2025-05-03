@@ -122,11 +122,9 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Env
 
     torch::NoGradGuard no_grad;
 
-    cache_params();
-
     Episode episode;
-    bool terminated;
-    bool truncated;
+    bool terminated = false;
+    bool truncated = false;
 
     int64_t n_truncated = 0;
 
@@ -158,13 +156,21 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Env
             environment->reset();
         }
     }
+    // cerr << "end" << '\n';
 
-    // When sampling episodes, we pause for training, but training (GAE etc) needs a T+1 value estimate
-    Tensor input = environment->get_observation_space();
-    auto value_predict = torch::flatten(critic_old->forward(input));
-    episode.update_truncated(value_predict);
+    if (not (truncated or terminated)) {
+        // cerr << "updating truncated value" << '\n';
+        // When sampling episodes, we pause for training, but training (GAE etc) needs a T+1 value estimate
+        Tensor input = environment->get_observation_space();
+        auto value_predict = torch::flatten(critic_old->forward(input));
+        episode.update_truncated(value_predict);
+    }
 
     episode.to_tensor(tensor_episode);
+
+    // cerr << tensor_episode.terminated << '\n';
+    // cerr << tensor_episode.value_predictions << '\n';
+    // cerr << tensor_episode.truncation_values << '\n';
 }
 
 
@@ -181,6 +187,7 @@ void PPOAgent::train(shared_ptr<const Environment> env){
     }
 
     for (size_t i=0; i<n_cycles; i++) {
+        cache_params();
         train_cycle(envs, cycle_length);
         cerr << 100.0*float(i+1)/float(n_cycles) << "%" << '\n';
     }
@@ -225,20 +232,15 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
 
     TensorEpisode episode(episodes);
 
-    auto n_episodes = torch::sum(episode.terminated).item<int64_t>() + torch::count_nonzero(episode.truncation_values).item<int64_t>();
+    // Subtract 1 because last step will always appear as truncated
+    // TODO: fix this stat for -INF truncation values
+    auto n_episodes = torch::sum(episode.terminated).item<int64_t>() + torch::count_nonzero(episode.truncation_values).item<int64_t>() - 1;
     auto total_reward = torch::sum(episode.rewards).item<float>();
 
     cerr << "avg episode reward: " << total_reward / float(n_episodes) << '\n';
     cerr << "avg episode length: " << float(episode.size) / float(n_episodes) << '\n';
 
-    // cerr << "log_action_distributions: " << episode.log_action_distributions.sizes() << '\n';
-    // cerr << "states: " << episode.states.sizes() << '\n';
-    // cerr << "value_predictions: " << episode.value_predictions.sizes() << '\n';
-    // cerr << "actions: " << episode.actions.sizes() << '\n';
-    // cerr << "rewards: " << episode.rewards.sizes() << '\n';
-    // cerr << "td_rewards: " << episode.td_rewards.sizes() << '\n';
-    // cerr << "mask: " << episode.mask.sizes() << '\n';
-
+    // Still neeeded for Critic
     episode.compute_td_rewards(hyperparams.gamma);
 
     for (size_t i=0; i<hyperparams.n_epochs; i++) {

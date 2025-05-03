@@ -250,9 +250,11 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
             auto action_dists = actor->forward(batch.states);
             batch.value_predictions = critic->forward(batch.states).squeeze();
 
-            auto critic_loss = batch.compute_critic_loss(true);
             auto clip_loss = batch.compute_clip_loss(action_dists, 0.95, hyperparams.gamma, 0.2, true);
             auto entropy_loss = batch.compute_entropy_loss(action_dists, true, true);
+
+            auto actor_loss = clip_loss + hyperparams.lambda*entropy_loss;
+            auto critic_loss = 0.5*batch.compute_critic_loss(true);
 
             // if (not hyperparams.silent) {
             if (not hyperparams.silent and b == 0) {
@@ -268,8 +270,6 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
                 << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()/float(batch.size)
                 << std::setw(14) << "reward_avg" << std::setw(10) << reward_avg << '\n';
             }
-
-            auto actor_loss = clip_loss + hyperparams.lambda*entropy_loss;
 
             critic_loss.backward();
             actor_loss.backward();

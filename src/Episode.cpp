@@ -333,7 +333,7 @@ Tensor TensorEpisode::compute_critic_loss(bool mean) const{
         throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
     }
 
-    auto loss = torch::sum(torch::pow(td_rewards - value_predictions, 2) / 2);
+    auto loss = torch::sum(torch::pow(td_rewards - value_predictions, 2));
 
     // If requested, average the loss
     if (mean) {
@@ -618,7 +618,7 @@ Tensor Episode::compute_critic_loss(float gamma, bool mean) const{
     // Sum the squared error loss for each time step
     for (size_t i=0; i<size; i++) {
         // Compute squared loss between the predicted value and the target return
-        loss = loss + torch::pow(td_rewards[i] - value_predictions[i], 2) / 2;
+        loss = loss + torch::pow(td_rewards[i] - value_predictions[i], 2);
     }
 
     // If requested, average the loss

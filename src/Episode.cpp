@@ -207,7 +207,6 @@ Tensor TensorEpisode::compute_entropy_loss(const Tensor& log_action_probs, bool 
         auto A = float(log_action_probs.sizes()[1]);
         auto denom = torch::log(torch::tensor(A));
 
-        // Keep the value negative so that we don't accidentally flip the optimization direction
         entropy = entropy/denom;
     }
 

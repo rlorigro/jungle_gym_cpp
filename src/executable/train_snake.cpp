@@ -211,6 +211,7 @@ int main(int argc, char* argv[]){
     } CPPTRACE_CATCH(const std::exception& e) {
         std::cerr<<"Exception: "<<e.what()<<std::endl;
         cpptrace::from_current_exception().print_with_snippets();
+        throw e;
     }
 
     return 0;

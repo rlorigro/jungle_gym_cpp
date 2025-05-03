@@ -79,7 +79,7 @@ rollouts to dwarf the entropy reward. In this sense, the entropy regularizer is 
 preventing early convergence, compared to epsilon scheduling, which is typically hardcoded.
 
 $$
-L_{\text{total}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot R_t + \lambda H(\pi_\theta(a_t | s_t)) \right)
+L_{total} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot R_t - \lambda H(\pi_\theta(a_t | s_t)) \right)
 $$
 
 where $R_t$ is computed according to Temporal Difference recurrence relation:
@@ -106,14 +106,14 @@ updates, even when the absolute scale of the rewards varies widely. While the cr
 reward magnitude, the advantage-based policy (actor) update is relatively well-behaved.
 
 $$
-L_{\text{actor}} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] + \lambda H(\pi_\theta(a_t | s_t)) \right)
+L_{actor} = - \sum_{t=0}^{T-1} \left( \log \pi_\theta(a_t | s_t) \cdot [R_t - V(s_t)] - \lambda H(\pi_\theta(a_t | s_t)) \right)
 $$
 
 $$
-L_{\text{critic}} = \frac{1}{2} \sum_{t=0}^{T-1} \left(R_t - V(s_t)\right)^2
+L_{critic} = \frac{1}{2} \sum_{t=0}^{T-1} \left(R_t - V(s_t)\right)^2
 $$
 
-### 4. A3C [^3]
+### 4. Asynchronous Actor-Critic Agent (A3C) [^3]
 
 This implementation of A3C makes use of a specialized, thread safe, parameter optimizer, RMSPropAsync, which 
 combines gradients from worker threads to update a shared parameter set. The shared parameter set is then distributed 
@@ -155,6 +155,58 @@ The scaling behavior of RMSPropAsync is as follows:
 Where "naive" refers to the simple linear iteration of the vector<Tensor> of parameters, and the others use finer 
 grained, uniform chunk sizes, and random iteration order. Episode lengths ($\tau$) are 16 steps. More information about 
 benchmarking available [here](docs/a3c_benchmark.md). 
+
+
+### 4. Proximal Policy Optimization (PPO)
+
+PPO's approach to increasing sample efficiency is to perform trajectory sampling in large chunks and 
+then batched training on those trajectories. This method is convenient for deployment because the trajectory sampling 
+can be performed entirely without gradient tracking (inference only), and then localized for high efficiency training.
+
+The focus of their publication is a loss term which acts as a surrogate for a KL divergence penalty, referred to as 
+$L_{CLIP}$. The surrogate objective prevents updates from causing the parameters of the new policy from diverging
+excessively from those of the previous policy, reducing the issues that come from nonstationarity and variance in
+the reward.
+
+
+$$
+L_{CLIP} = \hat{\mathbb{E}}_t [ min(r_t\hat{A_t}, clip(r_t, 1 - \epsilon, 1 + \epsilon)\hat{A_t}) ]
+$$
+
+where 
+
+$$
+r_t = \frac{\pi_{\theta}(s_t,a_t)}{\pi_{\theta_{old}}(s_t,a_t)}
+$$
+
+And $\hat{A}$ is the advantage estimate, which is computed over the batches of length $T$ using Generalized Advantage 
+Estimation (GAE):
+
+$$
+\hat{A} = \delta_t + (\gamma\lambda)\delta_{t+1} + ... + (\gamma\lambda)^{T-t+1}\delta_{T-1}
+$$
+
+where
+
+$$
+\delta_t = \underbrace{r_t + \gamma V(s_{t+1})}_{\text{Target}} - \underbrace{V(s_t)}_{\text{Current estimate}}
+$$
+
+Taken by itself, $\delta_t$ can be referred to as the "TD error", though in the context of trying to compute the 
+advantage, "error" can be interpreted as the added (surprise) empirical benefit over the expected return from taking action 
+$a_t$ at $s_t$.
+
+The $L_{CLIP}$ term of the loss is combined with the usual critic MSE loss for each batch:
+
+$$
+L_{actor} = -L_{CLIP} - c_2L_{entropy}
+$$
+
+$$
+L_{\text{critic}} = c_1 \sum_{t=0}^{T-1} \left(R_t - V(s_t)\right)^2
+$$
+
+(Signs are flipped relative to the publication to make it clear that the L stands for Loss which should be minimized)
 
 ## Models
 
@@ -238,7 +290,7 @@ I chose C++ because I think it is well suited for building multithreaded applica
 - ~~Benchmark speed vs n_threads for A3C~~
 - ~~Add model checkpoints/saving/loading~~
 - Print critic's value estimation for every state during test demo
-- Exhaustive tests and fix A3C regression
+- (Truly) Exhaustive tests ~~and fix A3C regression~~
 - plot attention map
 - ~~implement a3c (now currently a2c)~~
 - ~~Critic network and baseline subtraction~~

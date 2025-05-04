@@ -173,7 +173,7 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
             << std::setw(7) << e
             << std::setw(4) << episode.get_size()
             << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
-            << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()/float(episode.get_size())
+            << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()
             << std::setw(5) << "l_td " << std::setw(12) << td_loss.item<float>()
             << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()
             << std::setw(10) << "reward_ep" << std::setw(10) << total_reward

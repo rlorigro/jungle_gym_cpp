@@ -283,6 +283,41 @@ bool test_clip_loss() {
 }
 
 
+bool test_n_episodes() {
+    Episode ep;
+
+    auto log_probs = torch::log_softmax(torch::tensor({1.0, 1.0, 1.0}), 0);
+    ep.update(log_probs, 0, 0.0, false, false);
+    ep.update(log_probs, 1, 0.0, false, true);
+    ep.update(log_probs, 1, 0.0, true, false);
+
+    TensorEpisode te;
+    ep.to_tensor(te);
+
+    auto n = te.get_n_episodes();
+	int64_t expected = 2;
+
+    // ---- test TensorEpisode ----
+    cerr << "TensorEpisode" << '\n';
+
+    bool success = (expected == n);
+
+    cerr << "expected:\n" << expected << '\n';
+    cerr << "n:\n" << n << '\n';
+
+    // ---- test Episode ----
+    cerr << "Episode" << '\n';
+
+    n = ep.get_n_episodes();
+    success = success and (expected == n);
+
+    cerr << "expected:\n" << expected << '\n';
+    cerr << "n:\n" << n << '\n';
+
+    return success;
+}
+
+
 int main() {
     vector<bool> successes;
 

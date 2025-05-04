@@ -232,9 +232,8 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
 
     TensorEpisode episode(episodes);
 
-    // Subtract 1 because last step will always appear as truncated
-    auto n_episodes = episode.get_n_episodes() - 1;
-    auto total_reward = torch::sum(episode.rewards).item<float>();
+    auto n_episodes = episode.get_n_episodes();
+    auto total_reward = episode.rewards.sum().item<float>();
 
     cerr << "avg episode reward: " << total_reward / float(n_episodes) << '\n';
     cerr << "avg episode length: " << float(episode.size) / float(n_episodes) << '\n';
@@ -263,10 +262,10 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
                 cerr << std::setprecision(3) << std::left
                 << std::setw(7) << i
                 << std::setw(7) << b
-                << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda/float(batch.size)
-                << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()/float(batch.size)
-                << std::setw(7) << "l_clip " << std::setw(12) << clip_loss.item<float>()/float(batch.size)
-                << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()/float(batch.size)
+                << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
+                << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()
+                << std::setw(7) << "l_clip " << std::setw(12) << clip_loss.item<float>()
+                << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()
                 << std::setw(14) << "reward_avg" << std::setw(10) << reward_avg << '\n';
             }
 

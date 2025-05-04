@@ -16,6 +16,10 @@ namespace JungleGym{
 const float Episode::INF = std::numeric_limits<float>::infinity();
 const float TensorEpisode::INF = std::numeric_limits<float>::infinity();
 
+int64_t TensorEpisode::get_n_episodes() const {
+    return torch::sum(terminated).item<int64_t>() + truncation_values.eq(-INF).item<int64_t>() - 1;
+}
+
 TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
         size(0)
 {
@@ -340,6 +344,25 @@ Tensor TensorEpisode::compute_critic_loss(bool mean) const{
     }
 
     return loss;
+}
+
+
+int64_t Episode::get_n_episodes() const {
+    int64_t n=0;
+
+    for (auto item: terminated) {
+        if (item == 1) {
+            n++;
+        }
+    }
+
+    for (const auto& item: truncation_values) {
+        if (item.item<float>() == -INF) {
+            n++;
+        }
+    }
+
+    return n;
 }
 
 

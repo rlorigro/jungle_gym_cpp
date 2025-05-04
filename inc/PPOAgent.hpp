@@ -233,8 +233,7 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
     TensorEpisode episode(episodes);
 
     // Subtract 1 because last step will always appear as truncated
-    // TODO: fix this stat for -INF truncation values
-    auto n_episodes = torch::sum(episode.terminated).item<int64_t>() + torch::count_nonzero(episode.truncation_values).item<int64_t>() - 1;
+    auto n_episodes = episode.get_n_episodes() - 1;
     auto total_reward = torch::sum(episode.rewards).item<float>();
 
     cerr << "avg episode reward: " << total_reward / float(n_episodes) << '\n';

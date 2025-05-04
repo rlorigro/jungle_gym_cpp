@@ -48,6 +48,7 @@ public:
     void compute_td_rewards(float gamma);
     Tensor compute_GAE(float gamma, float lambda) const;
     void for_each_batch(int64_t batch_size, const function<void(TensorEpisode& batch)>& f) const;
+    int64_t get_n_episodes() const;
 
     TensorEpisode():size(0){};
 
@@ -168,6 +169,7 @@ public:
     void update_truncated(Tensor& value_prediction);
 
     void to_tensor(TensorEpisode& tensor_episode);
+    int64_t get_n_episodes() const;
 
     Episode():size(0){};
 

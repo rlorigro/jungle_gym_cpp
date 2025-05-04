@@ -156,10 +156,8 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Env
             environment->reset();
         }
     }
-    // cerr << "end" << '\n';
 
     if (not (truncated or terminated)) {
-        // cerr << "updating truncated value" << '\n';
         // When sampling episodes, we pause for training, but training (GAE etc) needs a T+1 value estimate
         Tensor input = environment->get_observation_space();
         auto value_predict = torch::flatten(critic_old->forward(input));
@@ -167,10 +165,6 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Env
     }
 
     episode.to_tensor(tensor_episode);
-
-    // cerr << tensor_episode.terminated << '\n';
-    // cerr << tensor_episode.value_predictions << '\n';
-    // cerr << tensor_episode.truncation_values << '\n';
 }
 
 
@@ -238,7 +232,7 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
     cerr << "avg episode reward: " << total_reward / float(n_episodes) << '\n';
     cerr << "avg episode length: " << float(episode.size) / float(n_episodes) << '\n';
 
-    // Still neeeded for Critic
+    // Still needed for Critic
     episode.compute_td_rewards(hyperparams.gamma);
 
     for (size_t i=0; i<hyperparams.n_epochs; i++) {
@@ -287,8 +281,6 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
 
 
 void PPOAgent::test(shared_ptr<const Environment> env){
-    // throw runtime_error("PPOAgent::test NOT IMPLEMENTED");
-
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }

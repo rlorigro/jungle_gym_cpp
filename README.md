@@ -9,8 +9,11 @@ A C++ implementation of reinforcement learning algorithms using libtorch.
 
 Emulates the snake game with a NN-friendly observation space. Defining aspects of the Snake game:
 
-- Sparse rewards: chance of randomly encountering an apple is $\frac{1}{H*W}$ 
-- Procedurally generated: the 
+- **Sparse rewards**: chance of randomly encountering an apple is $\frac{1}{H*W}$ 
+- **Procedurally generated**: avoids overfitting by memorizing a trajectory, many possible states
+- **Difficulty scaling**: complexity of the solution ramps up as the agent progresses, snake gets longer
+- **Very fast to update**
+- **Easy to implement**
 
 #### Observation space:
 Fully observable with each position containing $c$ channels, i.e. a tensor

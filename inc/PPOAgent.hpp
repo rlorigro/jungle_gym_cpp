@@ -299,7 +299,6 @@ void PPOAgent::test(shared_ptr<const Environment> env){
 
         while (true) {
             auto input = environment->get_observation_space();
-            input += 0.0001;
 
             // Get value prediction (singleton tensor)
             auto value_predict = critic->forward(input);

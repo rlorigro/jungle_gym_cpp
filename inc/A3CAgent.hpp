@@ -178,8 +178,7 @@ void A3CAgent::test(shared_ptr<const Environment> env){
         environment->reset();
 
         while (true) {
-            auto input = environment->get_observation_space().clone();
-            input += 0.0001;
+            auto input = environment->get_observation_space();
 
             // Get value prediction (singleton tensor)
             auto value_predict = critic->forward(input);

@@ -121,7 +121,6 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
 
         for (size_t s=0; s<hyperparams.episode_length; s++) {
             Tensor input = environment->get_observation_space();
-            input += 0.0001;
 
             // Get value prediction (singleton tensor)
             auto value_predict = torch::flatten(critic->forward(input));
@@ -227,8 +226,7 @@ void A2CAgent::test(shared_ptr<Environment> environment){
 
     while (e < hyperparams.n_episodes) {
         for (size_t s=0; s<hyperparams.episode_length; s++) {
-            auto input = environment->get_observation_space().clone();
-            input += 0.0001;
+            auto input = environment->get_observation_space();
 
             // Get value prediction (singleton tensor)
             auto value_predict = critic->forward(input);

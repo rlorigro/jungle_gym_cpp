@@ -100,7 +100,6 @@ void PGAgent::train(shared_ptr<const Environment> env){
         for (size_t s=0; s<hyperparams.episode_length; s++) {
 
             Tensor input = environment->get_observation_space();
-            input += 0.0001;
 
             auto log_probabilities = torch::flatten(actor->forward(input));
             auto probabilities = torch::exp(log_probabilities);
@@ -179,7 +178,6 @@ void PGAgent::test(shared_ptr<const Environment> env){
 
         for (size_t s=0; s<hyperparams.episode_length; s++) {
             auto input = environment->get_observation_space();
-            input += 0.0001;
 
             // Get action distribution of the policy (shape of action space)
             auto log_probabilities = actor->forward(input);

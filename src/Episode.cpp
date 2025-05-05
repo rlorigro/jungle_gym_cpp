@@ -461,6 +461,13 @@ void Episode::update_truncated(Tensor& value_prediction){
 }
 
 
+void Episode::for_each_state(const function<void(const Tensor& state)>& f) const {
+    for (const auto& item: states) {
+        f(item);
+    }
+}
+
+
 void Episode::to_tensor(TensorEpisode& tensor_episode) {
     tensor_episode.size = int64_t(size);
     if (not states.empty()) {

@@ -168,6 +168,8 @@ public:
      */
     void update_truncated(Tensor& value_prediction);
 
+    void for_each_state(const function<void(const Tensor& state)>& f) const;
+
     void to_tensor(TensorEpisode& tensor_episode);
     int64_t get_n_episodes() const;
 

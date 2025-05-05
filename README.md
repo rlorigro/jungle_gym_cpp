@@ -7,7 +7,10 @@ A C++ implementation of reinforcement learning algorithms using libtorch.
 
 ### SnakeEnv
 
-Emulates the snake game with a NN-friendly observation space.
+Emulates the snake game with a NN-friendly observation space. Defining aspects of the Snake game:
+
+- Sparse rewards: chance of randomly encountering an apple is $\frac{1}{H*W}$ 
+- Procedurally generated: the 
 
 #### Observation space:
 Fully observable with each position containing $c$ channels, i.e. a tensor
@@ -189,12 +192,13 @@ $$
 where
 
 $$
-\delta_t = \underbrace{r_t + \gamma V(s_{t+1})}_{Target} - \underbrace{V(s_t)} _{Current estimate}
+\delta_t = \underbrace{r_t + \gamma V(s_{t+1})}_{Target} - \underbrace{V(s_t)} _{Estimate}
 $$
 
 Taken by itself, $\delta_t$ can be referred to as the "TD error", though in the context of trying to compute the 
 advantage, "error" can be interpreted as the added (surprise) empirical benefit over the expected return from taking action 
-$a_t$ at $s_t$.
+$a_t$ at $s_t$, or the instantaneous advantage, which is low in variance but high bias. The $\hat{A}$ estimator 
+interpolates between this and the conventional long horizon $R_t - V(s_t)$ estimate via the $\lambda$ parameter.
 
 The $L_{CLIP}$ term of the loss is combined with the usual critic MSE loss for each batch:
 

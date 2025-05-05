@@ -294,7 +294,7 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 ### PPOAgent
 
-This model is a bit chaotic but occasionally legitimately impressive. This demo comes from the top 10% of total 
+This model is a bit chaotic but occasionally legitimately impressive. This demo comes from the top 10% of 
 sampled trajectories. From my limited trials, it seems that PPO in this environment has a higher upper limit on 
 reward, whereas A3C didnt see much benefit from training beyond 1M steps. More benchmarking to come.
 

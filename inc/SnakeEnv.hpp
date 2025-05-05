@@ -95,6 +95,7 @@ public:
     void render(bool interactive) override;
     void close() override;
     shared_ptr<Environment> clone() const override;
+    Tensor render_frame(const Tensor& observation) const override;
 
     SnakeEnv(int64_t width, int64_t height);
     SnakeEnv();

@@ -12,6 +12,7 @@ using std::make_shared;
 using std::shared_mutex;
 using std::mt19937;
 using std::atomic;
+using torch::Tensor;
 
 
 namespace JungleGym{
@@ -56,6 +57,9 @@ public:
     virtual void reset()=0;
     virtual void render(bool interactive)=0;
     virtual void close()=0;
+
+    // Convert any given observation to an RGBA Tensor (for making animated demos)
+    virtual Tensor render_frame(const Tensor& observation) const=0;
 
     // Needed for copying in dynamic dispatch
     virtual shared_ptr<Environment> clone() const=0;

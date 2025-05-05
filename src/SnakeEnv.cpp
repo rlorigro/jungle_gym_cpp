@@ -163,7 +163,6 @@ torch::Tensor SnakeEnv::get_observation_space() const {
         i++;
     }
 
-    // Mean = 0, Stddev = 1, Shape = etc
     torch::Tensor noise = torch::normal(0.0, 0.01, o.sizes());
     o += noise;
     o.clip_(0.0, 1.0);
@@ -348,6 +347,33 @@ void SnakeEnv::get_neck(coord_t& coord) const {
 }
 
 
+Tensor SnakeEnv::render_frame(const Tensor& observation) const {
+    // [N,C,W,H]
+    Tensor f = observation.squeeze(0);
+
+    // Undo offset TODO: make this an augmentation wrapper
+    f += OFFSET;
+
+    vector<Tensor> in_channels = f.unbind(0);
+    vector<Tensor> out_channels(4);
+
+    // [C,W,H] where C is RGBA
+    // out_channels[0] = torch::round(in_channels[SNAKE_BODY] + 0.25) + torch::round(in_channels[SNAKE_HEAD]);
+
+    out_channels[0] = in_channels[SNAKE_BODY].clip(0,0.7) + torch::round(in_channels[SNAKE_HEAD]);
+    out_channels[1] = torch::round(in_channels[APPLE]);
+    out_channels[2] = torch::round(in_channels[WALL]);
+    out_channels[3] = torch::ones(in_channels[WALL].sizes(), torch::kFloat32);
+
+    // cerr << "out_channels[0]\n" << out_channels[0] << '\n';
+    // cerr << "out_channels[1]\n" << out_channels[1] << '\n';
+    // cerr << "out_channels[2]\n" << out_channels[2] << '\n';
+    // cerr << "out_channels[3]\n" << out_channels[3] << '\n';
+
+    return torch::stack(out_channels).clip(0,1);
+}
+
+
 void SnakeEnv::render(bool interactive) {
     int32_t SCREEN_WIDTH = 600;
     int32_t SCREEN_HEIGHT = SCREEN_WIDTH;
@@ -425,11 +451,12 @@ void SnakeEnv::render(bool interactive) {
 
         // Fetch the observation space and convert to [W,H,C] aka [X,Y,Z] shape
         auto o = get_observation_space().permute({0,2,3,1});
+        lock.unlock();
+
         o.squeeze_(0);
         o += OFFSET;
 
         auto o_3d = o.accessor<float,3>();
-        lock.unlock();
 
         for (int64_t i_x=0; i_x<o.sizes()[0]; i_x++) {
             for (int64_t i_y=0; i_y<o.sizes()[1]; i_y++) {

@@ -56,6 +56,7 @@ include_directories(SYSTEM
 set(SOURCES
         src/Environment.cpp
         src/Episode.cpp
+        src/IterativeStats.cpp
         src/SnakeEnv.cpp
         src/misc.cpp
 )
@@ -147,6 +148,7 @@ endif()
 set(TESTS
     test_async_iterator
     test_episode
+    test_iterative_stats
     test_snake_env
     test_sdl2
     benchmark_a3c
@@ -176,6 +178,7 @@ endforeach()
 
 set(EXECUTABLES
         train_snake
+        demo_snake
 )
 
 foreach(FILENAME_PREFIX ${EXECUTABLES})

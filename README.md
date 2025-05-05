@@ -257,6 +257,9 @@ Densenet with 2 convolution layers and CBAM spatial/channel attention [^4] [^2]
 
 ## Results / Demos
 
+🍒 These demos are chosen arbitrarily by me and are not a robust indication of the relative performance of these
+methods
+
 ### Early implementation of Policy Gradient
 
 An example of a mildly successful Policy Gradient SimpleConv agent trained with entropy regularization. You can see that 
@@ -282,15 +285,35 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 *Apologies for the low GIF quality, this test run includes added noise*
 
+### PPOAgent
+
+This model is a bit chaotic but occasionally legitimately impressive. This demo comes from the top 10% of total 
+sampled trajectories. From my limited trials, it seems that PPO in this environment has a higher upper limit on 
+reward, whereas A3C didnt see much benefit from training beyond 1M steps. More benchmarking to come.
+
+Trained with:
+
+```
+./train_snake --type ppo --n_threads 24 --batch_size 128 --lambda 0.04 --learn_rate 0.0001 --gamma 0.9 --n_steps_per_cycle 4096 --n_steps 2000000
+```
+
+![Alt Text](data/ppo_demo.gif)
 
 ### Why C++? (a.k.a. why NOT Python?)
-I chose C++ because I think it is well suited for building multithreaded applications but also because I want it to be able to interface directly with high performance methods/algos also written in C++. Part of the appeal of RL (to me) is that it can be applied to many different types of control and optimization problems. For training/evaluation/reward purposes, it is useful to be able to perform CPU or sequentially bound operations as fast as possible. There are many benchmark environments available with Python interfaces but my eventual goal is to apply this to my own custom environments. In addition to these considerations, the PyTorch RL support/documentation is fairly limited and lacking structure, so I found it difficult to use as a starting point.
+I chose C++ because I think it is well suited for building multithreaded applications but also because I want it to be 
+able to interface directly with high performance methods/algos also written in C++. Part of the appeal of RL (to me) is
+that it can be applied to many different types of control and optimization problems. For training/evaluation/reward 
+purposes, it is useful to be able to perform CPU or sequentially bound operations as fast as possible. There are many 
+benchmark environments available with Python interfaces but my eventual goal is to apply this to my own custom 
+environments. In addition to these considerations, the PyTorch RL support/documentation is fairly limited and 
+lacking structure, so I found it difficult to use as a starting point.
 
 ## To do
 - ~~Benchmark speed vs n_threads for A3C~~
 - ~~Add model checkpoints/saving/loading~~
 - Print critic's value estimation for every state during test demo
 - (Truly) Exhaustive tests ~~and fix A3C regression~~
+- Sample failure modes of Snake and consider frame stacking, different encoding.
 - plot attention map
 - ~~implement a3c (now currently a2c)~~
 - ~~Critic network and baseline subtraction~~

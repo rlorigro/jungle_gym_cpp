@@ -43,7 +43,7 @@ using std::cerr;
 using std::min;
 
 
-void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
+void train_and_test(Hyperparameters& hyperparams, string type, bool skip_demo){
     hyperparams.silent = false;
 
     // For now we fix the grid size
@@ -61,8 +61,8 @@ void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
         agent.train(env);
         agent.save(output_dir);
 
-        if (not skip_test){
-            agent.test(env);
+        if (not skip_demo){
+            agent.demo(env);
         }
     }
     else if (type == "a2c") {
@@ -77,8 +77,8 @@ void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
         agent.train(env);
         agent.save(output_dir);
 
-        if (not skip_test){
-            agent.test(env);
+        if (not skip_demo){
+            agent.demo(env);
         }
     }
     else if (type == "a3c") {
@@ -93,8 +93,8 @@ void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
         agent.train(env);
         agent.save(output_dir);
 
-        if (not skip_test){
-            agent.test(env);
+        if (not skip_demo){
+            agent.demo(env);
         }
     }
     else if (type == "ppo") {
@@ -109,8 +109,8 @@ void train_and_test(Hyperparameters& hyperparams, string type, bool skip_test){
         agent.train(env);
         agent.save(output_dir);
 
-        if (not skip_test){
-            agent.test(env);
+        if (not skip_demo){
+            agent.demo(env);
         }
     }
     else {
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]){
     CLI::App app{"App description"};
     Hyperparameters params;
     string type;
-    bool skip_test = false;
+    bool skip_demo = false;
 
     app.add_option(
             "--type",
@@ -138,11 +138,6 @@ int main(int argc, char* argv[]){
             "--episode_length",
             params.episode_length,
             "episode_length");
-
-    app.add_option(
-            "--n_episodes",
-            params.n_episodes,
-            "n_episodes");
 
     app.add_option(
             "--n_threads",
@@ -190,9 +185,9 @@ int main(int argc, char* argv[]){
             "n_epochs, ONLY FOR PPO");
 
     app.add_flag(
-            "--skip_test",
-            skip_test,
-            "Dont run the test method (which typically renders the environment)");
+            "--skip_demo",
+            skip_demo,
+            "Don't run the demo method which typically renders the environment");
 
     try{
         app.parse(argc, argv);
@@ -207,7 +202,7 @@ int main(int argc, char* argv[]){
     }
 
     CPPTRACE_TRY {
-        train_and_test(params, type, skip_test);
+        train_and_test(params, type, skip_demo);
     } CPPTRACE_CATCH(const std::exception& e) {
         std::cerr<<"Exception: "<<e.what()<<std::endl;
         cpptrace::from_current_exception().print_with_snippets();

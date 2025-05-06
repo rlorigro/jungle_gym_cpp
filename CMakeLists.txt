@@ -149,6 +149,7 @@ set(TESTS
     test_async_iterator
     test_episode
     test_iterative_stats
+    test_lr_scheduler
     test_snake_env
     test_sdl2
     benchmark_a3c

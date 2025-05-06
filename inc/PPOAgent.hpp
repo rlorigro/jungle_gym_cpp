@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Hyperparameters.hpp"
+#include "LRScheduler.hpp"
 #include "Environment.hpp"
 #include "Episode.hpp"
 #include "Policy.hpp"
@@ -39,13 +40,16 @@ class PPOAgent {
 
     Hyperparameters hyperparams;
 
+    inline void set_lr(float lr);
+
 public:
     inline PPOAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
     inline void sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Environment> env, atomic<size_t>& n_steps, size_t max_steps);
     inline void train_cycle(vector<shared_ptr<Environment>>& envs, size_t n_steps);
-    inline void train(shared_ptr<const Environment> env);
     inline void cache_params();
-    inline void test(shared_ptr<const Environment> env);
+
+    inline void train(shared_ptr<const Environment> env);
+    inline void demo(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
     inline void load(const path& actor_path, const path& critic_path);
 };
@@ -168,6 +172,16 @@ void PPOAgent::sample_trajectories(TensorEpisode& tensor_episode, shared_ptr<Env
 }
 
 
+void PPOAgent::set_lr(float lr) {
+    for (auto& group : optimizer_actor.param_groups()) {
+        group.options().set_lr(lr);
+    }
+    for (auto& group : optimizer_critic.param_groups()) {
+        group.options().set_lr(lr);
+    }
+}
+
+
 void PPOAgent::train(shared_ptr<const Environment> env){
     size_t n_steps_total = hyperparams.n_steps;
     size_t cycle_length = hyperparams.n_steps_per_cycle;
@@ -180,10 +194,24 @@ void PPOAgent::train(shared_ptr<const Environment> env){
         envs.emplace_back(env->clone());
     }
 
+    const double lr_0 = hyperparams.learn_rate;
+    const double lr_n = hyperparams.learn_rate_final;
+
+    cerr << "lr_0: " << lr_0 << '\n';
+    cerr << "lr_n: " << lr_n << '\n';
+
+    LinearLRScheduler scheduler(lr_0, lr_n, n_cycles);
+
     for (size_t i=0; i<n_cycles; i++) {
         cache_params();
         train_cycle(envs, cycle_length);
+
         cerr << 100.0*float(i+1)/float(n_cycles) << "%" << '\n';
+
+        float lr = float(scheduler.next());
+        set_lr(lr);
+
+        cerr << "learn rate: " << lr << '\n';
     }
 }
 
@@ -280,7 +308,7 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
 }
 
 
-void PPOAgent::test(shared_ptr<const Environment> env){
+void PPOAgent::demo(shared_ptr<const Environment> env){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }

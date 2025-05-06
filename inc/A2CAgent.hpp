@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include "Hyperparameters.hpp"
+#include "LRScheduler.hpp"
 #include "Environment.hpp"
 #include "Episode.hpp"
 #include "Policy.hpp"
@@ -33,7 +34,8 @@ public:
     inline A2CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
 
     inline void train(shared_ptr<Environment> env);
-    inline void test(shared_ptr<Environment> env);
+    inline void demo(shared_ptr<Environment> env);
+    inline void set_lr(float lr);
 
     /**
      * Additional signature for access to internal model params and optimizers, for use with the A3C algo for param sharing
@@ -49,6 +51,16 @@ public:
     inline void load(const path& actor_path, const path& critic_path);
 
 };
+
+
+void A2CAgent::set_lr(float lr) {
+    for (auto& group : optimizer_actor.param_groups()) {
+        group.options().set_lr(lr);
+    }
+    for (auto& group : optimizer_critic.param_groups()) {
+        group.options().set_lr(lr);
+    }
+}
 
 
 void A2CAgent::save(const path& output_dir) const{
@@ -97,6 +109,9 @@ void A2CAgent::train(shared_ptr<Environment> env) {
 }
 
 
+
+
+
 void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(shared_ptr<Model> actor, shared_ptr<Model> critic, size_t& e)>& f){
     if (!environment) {
         throw std::runtime_error("ERROR: A2CAgent::train Environment pointer is null");
@@ -112,7 +127,15 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
     bool is_terminated = false;
     bool is_truncated = false;
 
-    while (e < hyperparams.n_episodes) {
+    size_t n_episodes = hyperparams.n_steps / hyperparams.episode_length;
+
+    const auto lr_0 = hyperparams.learn_rate;
+    const auto lr_n = hyperparams.learn_rate_final;
+    const size_t n = hyperparams.n_steps / hyperparams.episode_length;
+
+    LinearLRScheduler scheduler(lr_0, lr_n, n);
+
+    while (e < n_episodes) {
         episode.clear();
 
         // exponential decay that terminates at ~0.018
@@ -194,22 +217,24 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
 
         e++;
 
-        // Periodically apply the accumulated gradient to the model
+        // Apply gradient to models
         if (e % hyperparams.batch_size == 0){
             optimizer_critic.step();
             optimizer_critic.zero_grad();
         }
 
-        // Periodically apply the accumulated gradient to the model
         if (e % hyperparams.batch_size == 0){
             optimizer_actor.step();
             optimizer_actor.zero_grad();
         }
+
+        auto lr = float(scheduler.next());
+        set_lr(lr);
     }
 }
 
 
-void A2CAgent::test(shared_ptr<Environment> environment){
+void A2CAgent::demo(shared_ptr<Environment> environment){
     if (!environment) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
@@ -224,7 +249,7 @@ void A2CAgent::test(shared_ptr<Environment> environment){
     size_t e = 0;
     std::thread t(std::bind(&Environment::render, environment, false));
 
-    while (e < hyperparams.n_episodes) {
+    while (true) {
         for (size_t s=0; s<hyperparams.episode_length; s++) {
             auto input = environment->get_observation_space();
 
@@ -234,8 +259,6 @@ void A2CAgent::test(shared_ptr<Environment> environment){
             // Get action distribution of the policy (shape of action space)
             auto log_probabilities = actor->forward(input);
             auto probabilities = torch::exp(log_probabilities);
-
-            cerr << probabilities << '\n';
 
             int64_t choice = torch::argmax(probabilities).item<int64_t>();
             // choice = torch::multinomial(probabilities, 1).item<int64_t>();

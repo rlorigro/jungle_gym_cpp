@@ -94,7 +94,8 @@ int main(int argc, char* argv[]){
     // for (auto n: {32}) {
     for (auto n: {1,2,4,8,16,32}) {
         hyperparams.n_threads = n;
-        hyperparams.n_episodes = 1000;
+        hyperparams.episode_length = 16;
+        hyperparams.n_steps = 1000*hyperparams.episode_length;
         hyperparams.silent = true;
         hyperparams.profile = true;
 

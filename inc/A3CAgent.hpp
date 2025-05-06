@@ -2,6 +2,7 @@
 
 #include "Hyperparameters.hpp"
 #include "RMSPropAsync.hpp"
+#include "LRScheduler.hpp"
 #include "Environment.hpp"
 #include "A2CAgent.hpp"
 #include "Episode.hpp"
@@ -36,7 +37,7 @@ class A3CAgent {
 public:
     inline A3CAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
     inline void train(shared_ptr<const Environment> env);
-    inline void test(shared_ptr<const Environment> env);
+    inline void demo(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
     inline void load(const path& actor_path, const path& critic_path);
     inline double get_wait_time_s() const;
@@ -107,9 +108,9 @@ void A3CAgent::train(shared_ptr<const Environment> env){
 
     const auto lr_0 = hyperparams.learn_rate;
     const auto lr_n = hyperparams.learn_rate_final;
-    const float n = hyperparams.n_episodes;
+    const size_t n = hyperparams.n_steps / hyperparams.episode_length;
 
-    const auto lr_step = (lr_n - lr_0) / n;
+    LinearLRScheduler scheduler(lr_0, lr_n, n);
 
     auto sync_fn = [&](shared_ptr<Model> actor_worker, shared_ptr<Model> critic_worker, size_t& e) {
         e = episode.fetch_add(1);
@@ -125,8 +126,9 @@ void A3CAgent::train(shared_ptr<const Environment> env){
         actor_worker->zero_grad();
         critic_worker->zero_grad();
 
-        optimizer_critic.lr = lr_0 + e*lr_step;
-        optimizer_actor.lr = lr_0 + e*lr_step;
+        // Step learning rates
+        optimizer_critic.lr = scheduler.next();
+        optimizer_actor.lr = scheduler.next();
 
         // This should be true to block the worker from stepping its own local optimizer and episode counter
         return true;
@@ -158,7 +160,7 @@ void A3CAgent::train(shared_ptr<const Environment> env){
 }
 
 
-void A3CAgent::test(shared_ptr<const Environment> env){
+void A3CAgent::demo(shared_ptr<const Environment> env){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }

@@ -161,12 +161,12 @@ void sample_trajectories(shared_ptr<const Environment> env, shared_ptr<SimpleCon
             float total_reward = environment->get_total_reward();
             int64_t n = reward_stats.get_n();
 
-            if (n > n_burn_in) {
+            if (n > int64_t(n_burn_in)) {
                 episode.emplace_back(input);
             }
 
             if (environment->is_terminated() or environment->is_truncated()) {
-                if (n > n_burn_in) {
+                if (n > int64_t(n_burn_in)) {
                     auto mean = float(reward_stats.get_mean());
                     auto stdev = float(reward_stats.get_stdev());
                     if (total_reward > mean + 1.5*stdev){

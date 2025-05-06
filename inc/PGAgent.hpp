@@ -28,7 +28,7 @@ class PGAgent {
 public:
     inline PGAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor);
     inline void train(shared_ptr<const Environment> env);
-    inline void test(shared_ptr<const Environment> env);
+    inline void demo(shared_ptr<const Environment> env);
     inline void save(const path& output_path) const;
     inline void load(const path& actor_path);
 
@@ -89,7 +89,9 @@ void PGAgent::train(shared_ptr<const Environment> env){
         cerr << "Using eps_norm: " << eps_norm << " for eps_terminal: " << eps_terminal << '\n';
     }
 
-    while (e < hyperparams.n_episodes) {
+    size_t n_episodes = hyperparams.n_steps / hyperparams.episode_length;
+
+    while (e < n_episodes) {
         environment->reset();
         episode.clear();
 
@@ -158,7 +160,7 @@ void PGAgent::train(shared_ptr<const Environment> env){
 }
 
 
-void PGAgent::test(shared_ptr<const Environment> env){
+void PGAgent::demo(shared_ptr<const Environment> env){
     if (!env) {
         throw std::runtime_error("ERROR: Environment pointer is null");
     }
@@ -173,7 +175,7 @@ void PGAgent::test(shared_ptr<const Environment> env){
     size_t e = 0;
     std::thread t(std::bind(&Environment::render, environment, false));
 
-    while (e < hyperparams.n_episodes) {
+    while (true) {
         environment->reset();
 
         for (size_t s=0; s<hyperparams.episode_length; s++) {

@@ -170,7 +170,7 @@ void sample_trajectories(shared_ptr<const Environment> env, shared_ptr<SimpleCon
                     auto mean = float(reward_stats.get_mean());
                     auto stdev = float(reward_stats.get_stdev());
                     if (total_reward > mean + 1.5*stdev){
-                        path out_path = output_dir / to_string(n_saved);
+                        path out_path = output_dir / (to_string(n_saved) + ".gif");
 
                         cerr << "Saving: " << out_path << '\n';
                         cerr << "total_reward: " << total_reward << '\n';

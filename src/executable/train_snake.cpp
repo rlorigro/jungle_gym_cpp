@@ -151,7 +151,7 @@ int main(int argc, char* argv[]){
 
     app.add_option(
             "--gamma",
-            params.gamma,
+            params.gamma_td,
             "gamma");
 
     app.add_option(
@@ -166,7 +166,7 @@ int main(int argc, char* argv[]){
 
     app.add_option(
             "--lambda",
-            params.lambda,
+            params.lambda_entropy,
             "lambda coeff for entropy loss");
 
     app.add_option(

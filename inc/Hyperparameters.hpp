@@ -15,10 +15,10 @@ public:
     size_t n_epochs = 4;
 
     // Decay rate of TD recurrence
-    float gamma = 0.95;
+    float gamma_td = 0.95;
 
     // Weight of entropy term in the loss function
-    float lambda = 0.01;
+    float lambda_entropy = 0.01;
 
     size_t n_threads = 1;
 

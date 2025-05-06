@@ -16,9 +16,11 @@ namespace JungleGym{
 const float Episode::INF = std::numeric_limits<float>::infinity();
 const float TensorEpisode::INF = std::numeric_limits<float>::infinity();
 
+
 int64_t TensorEpisode::get_n_episodes() const {
     return terminated.sum().item<int64_t>() + truncation_values.eq(-INF).sum().item<int64_t>() - 1;
 }
+
 
 TensorEpisode::TensorEpisode(vector<TensorEpisode>& episodes):
         size(0)

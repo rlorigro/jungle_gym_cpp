@@ -135,7 +135,7 @@ void PGAgent::train(shared_ptr<const Environment> env){
 
         e++;
 
-        auto td_loss = episode.compute_td_loss(hyperparams.gamma, true, false);
+        auto td_loss = episode.compute_td_loss(hyperparams.gamma_td, true, false);
         auto entropy_loss = episode.compute_entropy_loss(true, false);
 
         if (not hyperparams.silent) {
@@ -143,12 +143,12 @@ void PGAgent::train(shared_ptr<const Environment> env){
             cerr << std::left
             << std::setw(8) << "episode" << std::setw(8) << e
             << std::setw(8) << "length" << std::setw(6) << episode.get_size()
-            << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
+            << std::setw(14) << "entropy_loss" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda_entropy
             << std::setw(8) << "td_loss " << std::setw(12) << td_loss.item<float>()
             << std::setw(10) << "epsilon " << std::setw(10) << epsilon << '\n';
         }
 
-        auto loss = td_loss + hyperparams.lambda*entropy_loss;
+        auto loss = td_loss + hyperparams.lambda_entropy*entropy_loss;
         loss.backward();
 
         // Occasionally apply the accumulated gradient to the model

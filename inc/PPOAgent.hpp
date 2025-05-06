@@ -5,6 +5,7 @@
 #include "Environment.hpp"
 #include "Episode.hpp"
 #include "Policy.hpp"
+#include "misc.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -41,6 +42,7 @@ class PPOAgent {
     Hyperparameters hyperparams;
 
     inline void set_lr(float lr);
+    inline void reset_adam_timestep(torch::optim::Optimizer& optimizer);
 
 public:
     inline PPOAgent(const Hyperparameters& hyperparams, shared_ptr<Model> actor, shared_ptr<Model> critic);
@@ -212,6 +214,9 @@ void PPOAgent::train(shared_ptr<const Environment> env){
         set_lr(lr);
 
         cerr << "learn rate: " << lr << '\n';
+
+        reset_adamw_timestep(optimizer_actor);
+        reset_adamw_timestep(optimizer_critic);
     }
 }
 
@@ -230,13 +235,16 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
         throw runtime_error("ERROR: provided envs " + std::to_string(envs.size()) + " insufficient for n_threads "  + std::to_string(hyperparams.n_threads));
     }
 
+    // More concise
+    const auto& h = hyperparams;
+
     // Temporarily set torch MP threads to 1, so that trajectory sampling can be vanilla multithreaded
     torch::set_num_threads(1);
 
     atomic<size_t> step_index = 0;
 
     vector<thread> threads;
-    for (size_t i=0; i<hyperparams.n_threads; i++) {
+    for (size_t i=0; i<h.n_threads; i++) {
         if (!envs[i]) {
             throw runtime_error("ERROR: Environment pointer is null");
         }
@@ -250,7 +258,7 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
     }
 
     // Return the torch MP thread count to hyperparams.n_threads so that batched inference and training has max throughput
-    torch::set_num_threads(hyperparams.n_threads);
+    torch::set_num_threads(h.n_threads);
 
     TensorEpisode episode(episodes);
 
@@ -261,30 +269,30 @@ void PPOAgent::train_cycle(vector<shared_ptr<Environment> >& envs, size_t n_step
     cerr << "avg episode length: " << float(episode.size) / float(n_episodes) << '\n';
 
     // Still needed for Critic
-    episode.compute_td_rewards(hyperparams.gamma);
+    episode.compute_td_rewards(h.gamma_td);
 
-    for (size_t i=0; i<hyperparams.n_epochs; i++) {
+    for (size_t i=0; i<h.n_epochs; i++) {
         int64_t b = 0;
 
-        episode.for_each_batch(hyperparams.batch_size, [&](TensorEpisode& batch){
+        episode.for_each_batch(h.batch_size, [&](TensorEpisode& batch){
             auto action_dists = actor->forward(batch.states);
             batch.value_predictions = critic->forward(batch.states).squeeze();
 
-            auto clip_loss = batch.compute_clip_loss(action_dists, 0.95, hyperparams.gamma, 0.2, true);
+            auto clip_loss = batch.compute_clip_loss(action_dists, 0.95, h.gamma_td, 0.2, true);
             auto entropy_loss = batch.compute_entropy_loss(action_dists, true, true);
 
-            auto actor_loss = clip_loss + hyperparams.lambda*entropy_loss;
+            auto actor_loss = clip_loss + h.lambda_entropy*entropy_loss;
             auto critic_loss = 0.5*batch.compute_critic_loss(true);
 
-            // if (not hyperparams.silent) {
-            if (not hyperparams.silent and b == 0) {
+            // if (not h.silent) {
+            if (not h.silent and b == 0) {
                 auto reward_avg = torch::sum(batch.rewards).item<float>()/float(batch.size);
 
                 // Print some stats, increment loss using episode, update model if batch_size accumulated
                 cerr << std::setprecision(3) << std::left
                 << std::setw(7) << i
                 << std::setw(7) << b
-                << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
+                << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*h.lambda_entropy
                 << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()
                 << std::setw(7) << "l_clip " << std::setw(12) << clip_loss.item<float>()
                 << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()

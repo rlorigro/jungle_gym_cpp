@@ -146,6 +146,7 @@ endif()
 # -------- TESTS --------
 
 set(TESTS
+    test_adam_rel
     test_async_iterator
     test_episode
     test_iterative_stats

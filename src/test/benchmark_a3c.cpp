@@ -50,9 +50,9 @@ int main(int argc, char* argv[]){
     hyperparams.silent = false;
 
     // Some params that historically work well
-    hyperparams.gamma =  0.90;
+    hyperparams.gamma_td =  0.90;
     hyperparams.learn_rate =  0.0001;
-    hyperparams.lambda =  0.07;
+    hyperparams.lambda_entropy =  0.07;
 
     // For now we fix the grid size
     size_t w = 10;

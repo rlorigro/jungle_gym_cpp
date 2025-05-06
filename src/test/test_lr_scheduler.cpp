@@ -5,9 +5,6 @@
 using std::runtime_error;
 using std::cerr;
 
-
-#include <iostream>
-#include <cmath>      // std::abs
 #include <algorithm>  // std::clamp
 
 

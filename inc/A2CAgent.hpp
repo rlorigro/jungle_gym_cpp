@@ -127,11 +127,14 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
     bool is_terminated = false;
     bool is_truncated = false;
 
-    size_t n_episodes = hyperparams.n_steps / hyperparams.episode_length;
+    // More concise
+    const auto& h = hyperparams;
 
-    const auto lr_0 = hyperparams.learn_rate;
-    const auto lr_n = hyperparams.learn_rate_final;
-    const size_t n = hyperparams.n_steps / hyperparams.episode_length;
+    size_t n_episodes = h.n_steps / h.episode_length;
+
+    const auto lr_0 = h.learn_rate;
+    const auto lr_n = h.learn_rate_final;
+    const size_t n = h.n_steps / h.episode_length;
 
     LinearLRScheduler scheduler(lr_0, lr_n, n);
 
@@ -142,7 +145,7 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
         // epsilon = pow(0.99,(float(e)/float(params.n_episodes)) * float(size_t(eps_norm))));
         std::bernoulli_distribution dist(epsilon);
 
-        for (size_t s=0; s<hyperparams.episode_length; s++) {
+        for (size_t s=0; s<h.episode_length; s++) {
             Tensor input = environment->get_observation_space();
 
             // Get value prediction (singleton tensor)
@@ -181,20 +184,20 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
             episode.update_truncated(value_predict);
         }
 
-        auto td_loss = episode.compute_td_loss(hyperparams.gamma, true, true);
+        auto td_loss = episode.compute_td_loss(h.gamma_td, true, true);
         auto entropy_loss = episode.compute_entropy_loss(true, true);
 
-        auto actor_loss = td_loss + hyperparams.lambda*entropy_loss;
-        auto critic_loss = 0.5*episode.compute_critic_loss(hyperparams.gamma, true);
+        auto actor_loss = td_loss + h.lambda_entropy*entropy_loss;
+        auto critic_loss = 0.5*episode.compute_critic_loss(h.gamma_td, true);
 
-        if (not hyperparams.silent and e % 10 == 0) {
+        if (not h.silent and e % 10 == 0) {
             auto total_reward = episode.get_total_reward();
 
             // Print some stats, increment loss using episode, update model if batch_size accumulated
             cerr << std::setprecision(3) << std::left
             << std::setw(7) << e
             << std::setw(4) << episode.get_size()
-            << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*hyperparams.lambda
+            << std::setw(10) << "l_entropy" << std::setw(12) << entropy_loss.item<float>()*h.lambda_entropy
             << std::setw(8) << "entropy" << std::setw(12) << -entropy_loss.item<float>()
             << std::setw(5) << "l_td " << std::setw(12) << td_loss.item<float>()
             << std::setw(9) << "l_critic" << std::setw(12) << critic_loss.item<float>()
@@ -218,12 +221,12 @@ void A2CAgent::train(shared_ptr<Environment> environment, const function<bool(sh
         e++;
 
         // Apply gradient to models
-        if (e % hyperparams.batch_size == 0){
+        if (e % h.batch_size == 0){
             optimizer_critic.step();
             optimizer_critic.zero_grad();
         }
 
-        if (e % hyperparams.batch_size == 0){
+        if (e % h.batch_size == 0){
             optimizer_actor.step();
             optimizer_actor.zero_grad();
         }

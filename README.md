@@ -163,7 +163,7 @@ grained, uniform chunk sizes, and random iteration order. Episode lengths ($\tau
 benchmarking available [here](docs/a3c_benchmark.md). 
 
 
-### 4. Proximal Policy Optimization (PPO)
+### 4. Proximal Policy Optimization (PPO) [^6][^7]
 
 PPO's approach to increasing sample efficiency is to perform trajectory sampling in large chunks and 
 then batched training on those trajectories. This method is convenient for deployment because the trajectory sampling 
@@ -296,7 +296,7 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 This model is a bit chaotic but occasionally legitimately impressive. This demo comes from the top 10% of 
 sampled trajectories. From my limited trials, it seems that PPO in this environment has a higher upper limit on 
-reward, whereas A3C didnt see much benefit from training beyond 1M steps. More benchmarking to come.
+reward, whereas A3C didn't see much benefit from training beyond 1M steps. More benchmarking to come.
 
 Trained with:
 
@@ -341,12 +341,17 @@ lacking structure, so I found it difficult to use as a starting point.
 
 ## References
 
-[^1]: Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). *Policy Gradient Methods for Reinforcement Learning with Function Approximation*. In *Advances in Neural Information Processing Systems*, vol. 12. MIT Press.
+[^1]: Sutton, R. S., McAllester, D., Singh, S., & Mansour, Y. (1999). Policy gradient methods for reinforcement learning with function approximation. In Advances in Neural Information Processing Systems (Vol. 12). MIT Press.
 
-[^2]: Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2018). *Densely Connected Convolutional Networks*. Preprint at [https://doi.org/10.48550/arXiv.1608.06993](https://doi.org/10.48550/arXiv.1608.06993).
+[^2]: Huang, G., Liu, Z., Van Der Maaten, L., & Weinberger, K. Q. (2018). Densely connected convolutional networks. arXiv preprint arXiv:1608.06993. https://doi.org/10.48550/arXiv.1608.06993
 
-[^3]: Mnih, V., Badia, A. P., Mirza, M., Graves, A., Lillicrap, T., Harley, T., Silver, D., & Kavukcuoglu, K. (2016). *Asynchronous Methods for Deep Reinforcement Learning*. Preprint at [https://doi.org/10.48550/arXiv.1602.01783](https://doi.org/10.48550/arXiv.1602.01783).
+[^3]: Mnih, V., Badia, A. P., Mirza, M., Graves, A., Lillicrap, T., Harley, T., Silver, D., & Kavukcuoglu, K. (2016). Asynchronous methods for deep reinforcement learning. arXiv preprint arXiv:1602.01783. https://doi.org/10.48550/arXiv.1602.01783
 
-[^4]: Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). *CBAM: Convolutional Block Attention Module*. Preprint at [https://doi.org/10.48550/arXiv.1807.06521](https://doi.org/10.48550/arXiv.1807.06521).
+[^4]: Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). CBAM: Convolutional block attention module. arXiv preprint arXiv:1807.06521. https://doi.org/10.48550/arXiv.1807.06521
 
-[^5]: Williams, R. J. & Peng, J. Function Optimization using Connectionist Reinforcement Learning Algorithms. Connection Science 3, 241–268 (1991).
+[^5]: Williams, R. J., & Peng, J. (1991). Function optimization using connectionist reinforcement learning algorithms. Connection Science, 3(3), 241–268. https://doi.org/10.1080/09540099108946587
+
+[^6]: Schulman, J., Moritz, P., Levine, S., Jordan, M., & Abbeel, P. (2018). High-dimensional continuous control using generalized advantage estimation. arXiv preprint arXiv:1506.02438. https://doi.org/10.48550/arXiv.1506.02438
+
+[^7]: Schulman, J., Wolski, F., Dhariwal, P., Radford, A., & Klimov, O. (2017). Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347. https://doi.org/10.48550/arXiv.1707.06347
+

@@ -295,7 +295,7 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 From my limited trials, it seems that PPO in this environment has a higher upper limit on 
 reward, whereas A3C didn't see much benefit from training beyond 1M steps. More benchmarking to come.
-This one was trained with linear learn rate annealing, Adam-Rel [^7], and 3M steps.
+This one was trained with linear learn rate annealing, Adam-Rel [^8], and 3M steps.
 
 ```
 ./train_snake --type ppo --n_threads 24 --batch_size 128 --lambda 0.02 --learn_rate 0.00025 --gamma 0.95 --n_steps_per_cycle 4096 --n_steps 3000000 --learn_rate_final 0 

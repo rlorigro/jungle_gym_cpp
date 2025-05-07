@@ -301,8 +301,6 @@ This one was trained with linear learn rate annealing, Adam-Rel [^8], and 3M ste
 ./train_snake --type ppo --n_threads 24 --batch_size 128 --lambda 0.02 --learn_rate 0.00025 --gamma 0.95 --n_steps_per_cycle 4096 --n_steps 3000000 --learn_rate_final 0 
 ```
 
-![Alt Text](data/ppo_demo2.gif)
-
 Here are 9 runs all from >1.0 standard deviation above the average performance for this model:
 
 ![Alt Text](data/ppo_demo_tiled.gif)

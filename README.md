@@ -294,17 +294,19 @@ Default episode length is 16 steps. Environments of non-truncated/terminated epi
 
 ### PPOAgent
 
-This model is a bit chaotic but occasionally legitimately impressive. This demo comes from the top 10% of 
-sampled trajectories. From my limited trials, it seems that PPO in this environment has a higher upper limit on 
+From my limited trials, it seems that PPO in this environment has a higher upper limit on 
 reward, whereas A3C didn't see much benefit from training beyond 1M steps. More benchmarking to come.
-
-Trained with:
+This one was trained with linear learn rate annealing, Adam-Rel [^7], and 3M steps.
 
 ```
-./train_snake --type ppo --n_threads 24 --batch_size 128 --lambda 0.04 --learn_rate 0.0001 --gamma 0.9 --n_steps_per_cycle 4096 --n_steps 2000000
+./train_snake --type ppo --n_threads 24 --batch_size 128 --lambda 0.02 --learn_rate 0.00025 --gamma 0.95 --n_steps_per_cycle 4096 --n_steps 3000000 --learn_rate_final 0 
 ```
 
-![Alt Text](data/ppo_demo.gif)
+![Alt Text](data/ppo_demo2.gif)
+
+Here are 9 runs all from >1.0 standard deviation above the average performance for this model:
+
+![Alt Text](data/ppo_demo_tiled.gif)
 
 ### Why C++? (a.k.a. why NOT Python?)
 I chose C++ because I think it is well suited for building multithreaded applications but also because I want it to be 
@@ -355,3 +357,4 @@ lacking structure, so I found it difficult to use as a starting point.
 
 [^7]: Schulman, J., Wolski, F., Dhariwal, P., Radford, A., & Klimov, O. (2017). Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347. https://doi.org/10.48550/arXiv.1707.06347
 
+[^8]: Ellis, B., Jackson, M. T., Lupu, A., Goldie, A. D., Fellows, M., Whiteson, S., & Foerster, J. (2024, December). Adam on local time: Addressing nonstationarity in RL with relative Adam timesteps. arXiv. https://doi.org/10.48550/arXiv.2412.17113

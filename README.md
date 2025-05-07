@@ -279,8 +279,7 @@ one.
 ### A3CAgent
 
 An example of a slightly more successful A3C SimpleConv agent trained with entropy regularization. It more directly 
-targets the apples, sometimes to its own detriment. It has a strong left turn bias, which could potentially be fixed 
-with some augmentation techniques like mirroring the observation and action space. Trained with:
+targets the apples, sometimes to its own detriment. It has a strong left turn bias. Trained with:
 
 ```
 ./train_snake --type a3c --gamma 0.9 --learn_rate 0.0001 --lambda 0.07 --n_episodes 60000 --n_threads 24

@@ -235,7 +235,7 @@ Tensor TensorEpisode::compute_td_loss(bool mean, bool advantage) const{
         throw runtime_error("ERROR: TensorEpisode::compute_td_loss: td_rewards empty, call compute_td_rewards() first!");
     }
 
-    auto loss = torch::tensor({0}, torch::dtype(torch::kFloat32));
+    Tensor loss;
 
     // Shapes:
     // action_distributions  [N,A]
@@ -280,6 +280,9 @@ Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
         throw runtime_error("ERROR: last item in TensorEpisode neither terminated nor truncated, cannot bootstrap V");
     }
 
+    // Detach before computing
+    auto v = value_predictions.detach();
+
     // `terminated` is kInt8, shape [N]
     for (int64_t t = size-1; t >= 0; t--) {
 
@@ -289,16 +292,16 @@ Tensor TensorEpisode::compute_GAE(float gamma, float lambda) const{
                 // Bootstrap and reset (ignore future values)
                 next_value = truncation_values[t];
             } else {
-                next_value = value_predictions[t+1];
+                next_value = v[t+1];
             }
         }
 
-        Tensor delta = rewards[t] + gamma * next_value * (1- terminated[t]) - value_predictions[t];
+        Tensor delta = rewards[t] + gamma * next_value * (1- terminated[t]) - v[t];
         advantages[t] = delta + gamma * lambda * (1- terminated[t]) * last_advantage;
         last_advantage = advantages[t];
     }
 
-    return advantages.detach();
+    return advantages;
 }
 
 
@@ -423,7 +426,7 @@ void Episode::update(Tensor& log_action_probs, Tensor& value_prediction, int64_t
 
         // For cases where we receive the truncated signal, usually the exact boundary is arbitrary
         // so we just pretend this state wasn't visited and update the values
-        truncation_values.back() = value_prediction;
+        truncation_values.back() = value_prediction.detach();
     }
     // ELSE: if the episode is empty AND being truncated, then it is ignored, because it's not necessary.
     // In this unusual case, it would have already been artificially truncated in the previous iteration, so skipping it
@@ -448,7 +451,7 @@ void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_pred
 
         // For cases where we receive the truncated signal, usually the exact boundary is arbitrary
         // so we just pretend this state wasn't visited and update the values
-        truncation_values.back() = value_prediction;
+        truncation_values.back() = value_prediction.detach();
     }
     // ELSE: if the episode is empty AND being truncated, then it is ignored, because it's not necessary.
     // In this unusual case, it would have already been artificially truncated in the previous iteration, so skipping it
@@ -459,7 +462,7 @@ void Episode::update(Tensor& state, Tensor& log_action_probs, Tensor& value_pred
 void Episode::update_truncated(Tensor& value_prediction){
     // Don't include the state that was truncated, but store the value in the previous index in case needed for the
     // GAE estimate or similar, which expects a t+1 estimate
-    truncation_values.back() = value_prediction;
+    truncation_values.back() = value_prediction.detach();
 }
 
 
